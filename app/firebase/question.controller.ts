@@ -85,3 +85,48 @@ export const getQuestionById = async (questionId: string) => {
         };
     }
 }
+
+export const getAllQuestions = async (teamId: string) => {
+    try {
+        // Fetch team doc to read its questions array
+        const teamDocRef = doc(firebasedb, 'teams', teamId);
+        const teamSnap = await getDoc(teamDocRef);
+
+        if (!teamSnap.exists()) {
+            return {
+                success: false,
+                message: "Team not found",
+            };
+        }
+
+        const teamData = teamSnap.data() as any;
+        const questionIds: string[] = Array.isArray(teamData?.questions) ? teamData.questions : [];
+
+        if (questionIds.length === 0) {
+            return {
+                success: true,
+                questions: [],
+            };
+        }
+
+        // Fetch each question doc in parallel
+        const questionPromises = questionIds.map(async (qid) => {
+            const qSnap = await getDoc(doc(firebasedb, 'questions', qid));
+            if (!qSnap.exists()) return null;
+            return { id: qSnap.id, ...(qSnap.data() as any) };
+        });
+
+        const questionResults = await Promise.all(questionPromises);
+        const questions = questionResults.filter(Boolean) as any[];
+
+        return {
+            success: true,
+            questions,
+        };
+    } catch (error) {
+        return {
+            success: false,
+            message: `Failed to fetch questions: ${(error as Error).message || String(error)}`,
+        };
+    }
+}

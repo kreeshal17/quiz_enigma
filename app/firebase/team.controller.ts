@@ -1,4 +1,4 @@
-import { addDoc, collection, doc, getDocs, runTransaction, updateDoc } from "firebase/firestore"
+import { addDoc, collection, doc, getDoc, getDocs, runTransaction, updateDoc } from "firebase/firestore"
 import { firebasedb } from "./firebase.config"
 
 interface Team {
@@ -139,6 +139,33 @@ export const finishQuiz = async (teamId: string, end_time: Date, marksScore: num
         return {
             success: false,
             message: `Failed to finish quiz: ${(error as Error).message || String(error)}`,
+        };
+    }
+}
+
+export const getTeamById = async (teamId: string) => {
+    try {
+        const teamDocRef = doc(firebasedb, 'teams', teamId);
+        const snap = await getDoc(teamDocRef);
+
+        if (!snap.exists()) {
+            return {
+                success: false,
+                message: "Team not found",
+            };
+        }
+
+        const data = snap.data() as any;
+        // include id and return
+        const team = { id: snap.id, ...data };
+        return {
+            success: true,
+            team,
+        };
+    } catch (error) {
+        return {
+            success: false,
+            message: `Failed to fetch team: ${(error as Error).message || String(error)}`,
         };
     }
 }
