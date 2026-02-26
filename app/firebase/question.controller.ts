@@ -5,6 +5,9 @@ interface Question {
     id: string
     question: string
     options: string[]
+    difficulty: "EASY" | "MEDIUM" | "HARD"
+    rewardPoints: 5 | 10 | 15
+    penaltyPoints: 2 | 5 | 10
     answerIndex: number
 }
 
