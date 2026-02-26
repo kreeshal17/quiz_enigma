@@ -1,172 +1,144 @@
-import { doc, getDoc, updateDoc, runTransaction } from "firebase/firestore";
-import { firebasedb } from "./firebase.config";
+import { addDoc, collection, doc, getDocs, runTransaction, updateDoc } from "firebase/firestore"
+import { firebasedb } from "./firebase.config"
 
-// ── Types ──────────────────────────────────────────────
-
-export interface TeamData {
-    team_name: string | null;
-    is_logged_in: boolean;
-    has_submitted: boolean;
-    score: number;
-    completion_time: number | null;
-}
-
-export interface LoginResult {
-    success: boolean;
-    message: string;
-    needsTeamName?: boolean;
-    teamName?: string | null;
-}
-
-// ── Validate Team ID format ────────────────────────────
-
-export const validateTeamIdFormat = (teamId: string): string | null => {
-    if (!teamId || teamId.trim().length === 0) {
-        return "Team ID is required.";
-    }
-    const id = teamId.trim().toUpperCase();
-    if (id.length !== 5) {
-        return "Team ID must be 5 uppercase letters.";
-    }
-    if (!/^[A-Z]{5}$/.test(id)) {
-        return "Team ID must be 5 uppercase letters.";
-    }
-    return null; // valid
-};
-
-// ── Look up team & check status ────────────────────────
-
-export const verifyTeamLogin = async (teamId: string): Promise<LoginResult> => {
-    const id = teamId.trim().toUpperCase();
-
-    try {
-        const teamRef = doc(firebasedb, "teams", id);
-        const snapshot = await getDoc(teamRef);
-
-        if (!snapshot.exists()) {
-            return { success: false, message: "Invalid Team ID." };
-        }
-
-        const data = snapshot.data() as TeamData;
-
-        if (data.has_submitted) {
-            return { success: false, message: "Quiz already submitted." };
-        }
-
-        if (data.is_logged_in) {
-            return { success: false, message: "This Team ID is already active." };
-        }
-
-        // Team exists and is available
-        if (!data.team_name) {
-            return { success: true, message: "Team name required.", needsTeamName: true };
-        }
-
-        return { success: true, message: "OK", needsTeamName: false, teamName: data.team_name };
-    } catch (error: unknown) {
-        const msg = error instanceof Error ? error.message : "Unknown error";
-        return { success: false, message: `Something went wrong: ${msg}` };
-    }
-};
-
-// ── Save team name + set is_logged_in (transaction) ────
-
-export const saveTeamNameAndLogin = async (
-    teamId: string,
+interface Team {
+    teamId: string
     teamName: string
-): Promise<LoginResult> => {
-    const id = teamId.trim().toUpperCase();
-    const name = teamName.trim();
+    teamMembers: TeamMember[]
+    questions: string[]
+    isStarted: boolean
+    isCompleted: boolean
+    start_time: Date | null
+    end_time: Date | null
+    marksScore: number | null
+    totalScore: number | null
+}
 
-    // Validate team name
-    if (name.length < 3 || name.length > 30) {
-        return { success: false, message: "Team name must be 3–30 characters." };
-    }
-    if (!/^[a-zA-Z0-9 ]+$/.test(name)) {
-        return { success: false, message: "Letters, numbers and spaces only." };
-    }
+interface TeamMember {
+    name: string
+    email: string
+}
 
+export const createTeam = async (team: Omit<Team, "questions">) => {
     try {
-        const teamRef = doc(firebasedb, "teams", id);
+        // Fetch all questions from 'questions' collection
+        const questionsCol = collection(firebasedb, "questions");
+        const snapshot = await getDocs(questionsCol);
+
+        // Map to question IDs (or change to use a field like 'text' if you prefer)
+        const questionIds = snapshot.docs.map((d) => d.id);
+
+        // Shuffle using Fisher-Yates
+        const shuffle = <T,>(arr: T[]) => {
+            const a = arr.slice();
+            for (let i = a.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [a[i], a[j]] = [a[j], a[i]];
+            }
+            return a;
+        };
+        const shuffledQuestions = shuffle(questionIds);
+
+        const teamRef = collection(firebasedb, 'teams');
+
+        // Ensure the team object stored has the shuffled questions
+        const teamToStore: Team = {
+            ...team,
+            questions: shuffledQuestions,
+        };
+
+        const docRef = await addDoc(teamRef, teamToStore);
+
+        return {
+            success: true,
+            message: "team created successfully",
+            teamId: docRef.id,
+        };
+    } catch (error) {
+        return {
+            success: false,
+            message: `Failed to create team: ${(error as Error).message || String(error)}`,
+        };
+    }
+}
+
+export const startQuiz = async (teamId: string, start_time: Date) => {
+    try {
+        const teamDocRef = doc(firebasedb, 'teams', teamId);
 
         await runTransaction(firebasedb, async (transaction) => {
-            const snapshot = await transaction.get(teamRef);
-            if (!snapshot.exists()) throw new Error("Invalid Team ID.");
+            const teamSnap = await transaction.get(teamDocRef);
+            if (!teamSnap.exists()) {
+                throw new Error("Team not found");
+            }
 
-            const data = snapshot.data() as TeamData;
-            if (data.has_submitted) throw new Error("Quiz already submitted.");
-            if (data.is_logged_in) throw new Error("This Team ID is already active.");
-            if (data.team_name) throw new Error("Team name already set.");
+            const data = teamSnap.data() as any;
+            // Prevent restarting an already started quiz
+            if (data.isStarted) {
+                throw new Error("Quiz already started for this team");
+            }
 
-            transaction.update(teamRef, {
-                team_name: name,
-                is_logged_in: true,
-            });
+            transaction.update(teamDocRef, { start_time, isStarted: true });
         });
 
-        return { success: true, message: "OK" };
-    } catch (error: unknown) {
-        const msg = error instanceof Error ? error.message : "Unknown error";
-        return { success: false, message: msg };
+        return {
+            success: true,
+            message: "Quiz started successfully",
+        };
+    } catch (error) {
+        return {
+            success: false,
+            message: `Failed to start quiz: ${(error as Error).message || String(error)}`,
+        };
     }
-};
+}
 
-// ── Login existing team (already has name) ─────────────
-
-export const loginTeam = async (teamId: string): Promise<LoginResult> => {
-    const id = teamId.trim().toUpperCase();
-
+export const finishQuiz = async (teamId: string, end_time: Date, marksScore: number) => {
+    // Use a transaction to read start_time and update fields atomically
     try {
-        const teamRef = doc(firebasedb, "teams", id);
+        const teamDocRef = doc(firebasedb, 'teams', teamId);
 
         await runTransaction(firebasedb, async (transaction) => {
-            const snapshot = await transaction.get(teamRef);
-            if (!snapshot.exists()) throw new Error("Invalid Team ID.");
+            const teamSnap = await transaction.get(teamDocRef);
+            if (!teamSnap.exists()) {
+                throw new Error("Team not found");
+            }
 
-            const data = snapshot.data() as TeamData;
-            if (data.has_submitted) throw new Error("Quiz already submitted.");
-            if (data.is_logged_in) throw new Error("This Team ID is already active.");
+            const data = teamSnap.data() as any;
+            const startRaw = data.start_time;
 
-            transaction.update(teamRef, { is_logged_in: true });
+            // Normalize start_time (could be a Firestore Timestamp or a Date)
+            const startDate =
+                startRaw instanceof Date
+                    ? startRaw
+                    : startRaw && typeof startRaw.toDate === "function"
+                        ? startRaw.toDate()
+                        : null;
+
+            // If start_time is missing, fall back to marksScore as totalScore
+            if (!startDate) {
+                const totalScore = marksScore;
+                transaction.update(teamDocRef, { end_time, isCompleted: true, marksScore, totalScore });
+                return;
+            }
+
+            const durationSeconds = Math.max(0, Math.floor((end_time.getTime() - startDate.getTime()) / 1000));
+
+            // Example scoring: subtract 1 point per full minute taken (adjust formula as needed)
+            const timePenalty = Math.floor(durationSeconds / 60);
+            const totalScore = Math.max(0, marksScore - timePenalty);
+
+            transaction.update(teamDocRef, { end_time, isCompleted: true, marksScore, totalScore });
         });
 
-        return { success: true, message: "OK" };
-    } catch (error: unknown) {
-        const msg = error instanceof Error ? error.message : "Unknown error";
-        return { success: false, message: msg };
+        return {
+            success: true,
+            message: "Quiz finished successfully",
+        };
+    } catch (error) {
+        return {
+            success: false,
+            message: `Failed to finish quiz: ${(error as Error).message || String(error)}`,
+        };
     }
-};
-
-// ── Submit quiz ────────────────────────────────────────
-
-export const submitQuiz = async (
-    teamId: string,
-    score: number,
-    completionTime: number
-): Promise<{ success: boolean; message: string }> => {
-    const id = teamId.trim().toUpperCase();
-
-    try {
-        const teamRef = doc(firebasedb, "teams", id);
-
-        await runTransaction(firebasedb, async (transaction) => {
-            const snapshot = await transaction.get(teamRef);
-            if (!snapshot.exists()) throw new Error("Invalid Team ID.");
-
-            const data = snapshot.data() as TeamData;
-            if (data.has_submitted) throw new Error("Quiz already submitted.");
-
-            transaction.update(teamRef, {
-                score,
-                completion_time: completionTime,
-                has_submitted: true,
-                is_logged_in: false,
-            });
-        });
-
-        return { success: true, message: "Quiz submitted successfully." };
-    } catch (error: unknown) {
-        const msg = error instanceof Error ? error.message : "Unknown error";
-        return { success: false, message: msg };
-    }
-};
+}

@@ -10,13 +10,10 @@ interface Question {
 
 export const createQuestion = async (question: Question) => {
     try {
-        console.log(question);
         const questionsRef = collection(firebasedb, 'questions');
-        console.log(questionsRef);
 
         // Add the new question to the Firestore collection
         const docRef = await addDoc(questionsRef, question);
-        console.log(docRef);
 
         // Return success response with the document ID
         return {
