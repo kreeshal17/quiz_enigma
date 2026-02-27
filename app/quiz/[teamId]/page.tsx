@@ -18,6 +18,7 @@ export default function Layout() {
   const [remainingSeconds, setRemainingSeconds] = useState<number>(3600);
   const [warning, setWarning] = useState<string | null>(null);
   const [finishing, setFinishing] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   // map of questionId -> selectedOptionIndex
   const [answersMap, setAnswersMap] = useState<Record<string, number>>({});
@@ -239,6 +240,45 @@ export default function Layout() {
     };
   }, [teamId, router]);
 
+  // attempt to enter fullscreen on mount; if blocked, provide a button fallback
+  useEffect(() => {
+    if (!teamId) return;
+
+    const tryEnter = async () => {
+      try {
+        if (document.fullscreenElement) {
+          setIsFullscreen(true);
+          return;
+        }
+        if (document.fullscreenEnabled) {
+          await document.documentElement.requestFullscreen();
+          setIsFullscreen(!!document.fullscreenElement);
+        }
+      } catch (err) {
+        // browsers usually block programmatic fullscreen without user gesture
+        console.warn('Unable to enter fullscreen automatically:', err);
+        setIsFullscreen(!!document.fullscreenElement);
+      }
+    };
+
+    tryEnter();
+
+    const onChange = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener('fullscreenchange', onChange);
+    return () => document.removeEventListener('fullscreenchange', onChange);
+  }, [teamId]);
+
+  const enterFullscreen = async () => {
+    try {
+      if (!document.fullscreenElement && document.fullscreenEnabled) {
+        await document.documentElement.requestFullscreen();
+        setIsFullscreen(!!document.fullscreenElement);
+      }
+    } catch (err) {
+      console.warn('Fullscreen request failed:', err);
+    }
+  };
+
   const formatTime = (secs: number) => {
     const mm = String(Math.floor(secs / 60)).padStart(2, "0");
     const ss = String(secs % 60).padStart(2, "0");
@@ -307,6 +347,16 @@ export default function Layout() {
       {tabWarning && (
         <div className="fixed inset-0 flex items-start justify-center pt-20 z-50 pointer-events-none">
           <div className="bg-yellow-500 text-black px-4 py-2 rounded shadow">{tabWarning}</div>
+        </div>
+      )}
+      {!isFullscreen && !finishing && (
+        <div className="fixed top-4 right-4 z-50">
+          <button
+            onClick={enterFullscreen}
+            className="px-3 py-1 bg-[#C6FF00] rounded text-black text-sm"
+          >
+            Enter fullscreen
+          </button>
         </div>
       )}
       <div className="w-full max-w-3xl">
