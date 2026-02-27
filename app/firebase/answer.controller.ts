@@ -17,6 +17,9 @@ export const createAnswer = async (answer: Answer) => {
         const questionDocRef = doc(firebasedb, "questions", answer.questionId);
         const teamDocRef = doc(firebasedb, "teams", answer.teamId);
 
+        console.log(answer);
+                
+
         await runTransaction(firebasedb, async (transaction) => {
             const qSnap = await transaction.get(questionDocRef);
             if (!qSnap.exists()) {
@@ -30,7 +33,7 @@ export const createAnswer = async (answer: Answer) => {
             }
             const teamData = tSnap.data() as any;
 
-            const existingAnsSnap = await transaction.get(answerDocRef);
+            const existingAnsSnap = await transaction.get(answerDocRef);            
             const isCorrect = (answer.selectedOptionIndex === questionData.answerIndex);
             const mark = isCorrect ? Number(questionData.rewardPoints || 0) : -Number(questionData.penaltyPoints || 0);
 
@@ -65,6 +68,7 @@ export const createAnswer = async (answer: Answer) => {
                 transaction.update(teamDocRef, { marksScore: newMarksScore });
             }
         });
+        console.log('controller here2');
 
         return {
             success: true,

@@ -2,7 +2,6 @@ import { addDoc, collection, doc, getDoc, updateDoc } from "firebase/firestore"
 import { firebasedb } from "./firebase.config"
 
 interface Question {
-    id: string
     question: string
     options: string[]
     difficulty: "EASY" | "MEDIUM" | "HARD"

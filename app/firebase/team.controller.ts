@@ -1,5 +1,6 @@
 import { addDoc, collection, doc, getDoc, getDocs, runTransaction, updateDoc } from "firebase/firestore"
 import { firebasedb } from "./firebase.config"
+import { getAnswersByTeamId } from "./answer.controller"
 
 interface Team {
     teamId: string
@@ -93,10 +94,17 @@ export const startQuiz = async (teamId: string, start_time: Date) => {
     }
 }
 
-export const finishQuiz = async (teamId: string, end_time: Date, marksScore: number) => {
+export const finishQuiz = async (teamId: string, end_time: Date) => {
     // Use a transaction to read start_time and update fields atomically
     try {
         const teamDocRef = doc(firebasedb, 'teams', teamId);
+
+        // fetch answers for the team and compute sum of `mark`
+        const answersRes = await getAnswersByTeamId(teamId);
+        let marksScore = 0;
+        if (answersRes?.success && Array.isArray(answersRes.answers)) {
+            marksScore = answersRes.answers.reduce((acc: number, a: any) => acc + Number(a.mark || 0), 0);
+        }
 
         await runTransaction(firebasedb, async (transaction) => {
             const teamSnap = await transaction.get(teamDocRef);
