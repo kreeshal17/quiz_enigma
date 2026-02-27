@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { getAllQuestions } from "@/app/firebase/question.controller";
 import { finishQuiz, getTeamById } from "@/app/firebase/team.controller";
@@ -21,6 +21,11 @@ export default function Layout() {
 
   // map of questionId -> selectedOptionIndex
   const [answersMap, setAnswersMap] = useState<Record<string, number>>({});
+  // ref to avoid duplicate auto-submit calls
+  const autoSubmittedRef = useRef(false);
+  // tab switch tracking
+  const tabSwitchCountRef = useRef(0);
+  const [tabWarning, setTabWarning] = useState<string | null>(null);
 
   // fetch team -> validate -> fetch questions & answers
   useEffect(() => {
@@ -105,12 +110,56 @@ export default function Layout() {
           setRemainingSeconds(initialRemaining);
 
           iv = setInterval(() => {
-            setRemainingSeconds((prev) => Math.max(0, prev - 1));
+            setRemainingSeconds((prev) => {
+              const next = Math.max(0, prev - 1);
+              if (next === 0 && !autoSubmittedRef.current) {
+                autoSubmittedRef.current = true;
+                if (iv) clearInterval(iv);
+                (async () => {
+                  setFinishing(true);
+                  try {
+                    const res = await finishQuiz(teamId, new Date());
+                    if (res?.success) {
+                      router.push("/leaderboard");
+                    } else {
+                      alert(res?.message || "Auto submit failed");
+                    }
+                  } catch (err) {
+                    console.error("Auto submit failed:", err);
+                  } finally {
+                    setFinishing(false);
+                  }
+                })();
+              }
+              return next;
+            });
           }, 1000);
         } else {
           setRemainingSeconds(TOTAL_SECONDS);
           iv = setInterval(() => {
-            setRemainingSeconds((prev) => Math.max(0, prev - 1));
+            setRemainingSeconds((prev) => {
+              const next = Math.max(0, prev - 1);
+              if (next === 0 && !autoSubmittedRef.current) {
+                autoSubmittedRef.current = true;
+                if (iv) clearInterval(iv);
+                (async () => {
+                  setFinishing(true);
+                  try {
+                    const res = await finishQuiz(teamId, new Date());
+                    if (res?.success) {
+                      router.push("/leaderboard");
+                    } else {
+                      alert(res?.message || "Auto submit failed");
+                    }
+                  } catch (err) {
+                    console.error("Auto submit failed:", err);
+                  } finally {
+                    setFinishing(false);
+                  }
+                })();
+              }
+              return next;
+            });
           }, 1000);
         }
       } catch (err) {
@@ -124,7 +173,71 @@ export default function Layout() {
       mounted = false;
       if (iv) clearInterval(iv);
     };
-  }, [teamId]);
+  }, [teamId, router]);
+
+  // prevent copy/contextmenu, detect tab switches and block devtools shortcuts
+  useEffect(() => {
+    if (!teamId) return;
+
+    const onVisibilityChange = () => {
+      if (document.hidden) {
+        tabSwitchCountRef.current += 1;
+        const count = tabSwitchCountRef.current;
+        if (count < 3) {
+          setTabWarning(`Warning: you switched tabs ${count} time(s). ${2 - (count - 1)} warning(s) left.`);
+          // hide warning after 3s
+          setTimeout(() => setTabWarning(null), 3000);
+        } else {
+          setTabWarning('You switched tabs 3 times — auto submitting quiz.');
+          if (!autoSubmittedRef.current) {
+            autoSubmittedRef.current = true;
+            (async () => {
+              setFinishing(true);
+              try {
+                const res = await finishQuiz(teamId, new Date());
+                if (res?.success) {
+                  router.push('/leaderboard');
+                } else {
+                  alert(res?.message || 'Auto submit failed');
+                }
+              } catch (err) {
+                console.error('Auto submit failed:', err);
+              } finally {
+                setFinishing(false);
+              }
+            })();
+          }
+        }
+      }
+    };
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      const k = e.key;
+      // block F12, Ctrl+Shift+I/J/C/K, Ctrl+U, Ctrl+Shift+K, Cmd+Opt+I (mac)
+      const isDevCombo =
+        k === 'F12' ||
+        ((e.ctrlKey || e.metaKey) && e.shiftKey && ['I', 'J', 'C', 'K'].includes(k.toUpperCase())) ||
+        ((e.ctrlKey || e.metaKey) && k.toUpperCase() === 'U');
+
+      if (isDevCombo) {
+        e.preventDefault();
+        e.stopPropagation();
+        // small user-facing message
+        setTabWarning('Opening developer tools is disabled on this page.');
+        setTimeout(() => setTabWarning(null), 2000);
+        return false;
+      }
+      return true;
+    };
+
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    window.addEventListener('keydown', onKeyDown, true);
+
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.removeEventListener('keydown', onKeyDown, true);
+    };
+  }, [teamId, router]);
 
   const formatTime = (secs: number) => {
     const mm = String(Math.floor(secs / 60)).padStart(2, "0");
@@ -186,7 +299,16 @@ export default function Layout() {
   const currentQid = current?.id ?? current?.firebaseId;
 
   return (
-    <div className="min-h-screen bg-[#0a0a0f] text-white flex items-start justify-center px-4 py-10 noise-bg">
+    <div
+      className="min-h-screen bg-[#0a0a0f] text-white flex items-start justify-center px-4 py-10 noise-bg"
+      onCopy={(e) => e.preventDefault()}
+      onContextMenu={(e) => e.preventDefault()}
+    >
+      {tabWarning && (
+        <div className="fixed inset-0 flex items-start justify-center pt-20 z-50 pointer-events-none">
+          <div className="bg-yellow-500 text-black px-4 py-2 rounded shadow">{tabWarning}</div>
+        </div>
+      )}
       <div className="w-full max-w-3xl">
         <div className="flex items-center justify-between mb-6">
           <div>
@@ -195,7 +317,7 @@ export default function Layout() {
             <div className="text-sm text-[#9aa0a6]">Team</div>
             <div>
               {team.teamMembers &&
-                team.teamMembers.map((member: any, index: number) => (
+                team.teamMembers.map((member: { name?: string; email?: string }, index: number) => (
                   <div key={index}>
                     <h1>{member.name}</h1>
                     <h1>{member.email}</h1>
