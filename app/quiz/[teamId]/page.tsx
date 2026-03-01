@@ -299,6 +299,7 @@ export default function Layout() {
   const currentQid = current?.id ?? current?.firebaseId;
 
   return (
+    
     <div
       className="min-h-screen bg-[#0a0a0f] text-white flex items-start justify-center px-4 py-10 noise-bg"
       onCopy={(e) => e.preventDefault()}
@@ -320,7 +321,7 @@ export default function Layout() {
                 team.teamMembers.map((member: { name?: string; email?: string }, index: number) => (
                   <div key={index}>
                     <h1>{member.name}</h1>
-                    <h1>{member.email}</h1>
+                    {/* <h1>{member.email}</h1> */}
                   </div>
                 ))}
             </div>
@@ -355,12 +356,19 @@ export default function Layout() {
             <div className="text-sm text-[#9aa0a6]">{/* placeholder */}</div>
 
             <button
-              onClick={() => setCurrentIndex((i) => Math.min(questions.length - 1, i + 1))}
-              className="px-4 py-2 rounded-xl bg-[#C6FF00] text-[#0a0a0f] text-sm"
-              disabled={currentIndex >= questions.length - 1}
-            >
-              Next
-            </button>
+  onClick={() => {
+    // if last question → submit quiz
+    if (currentIndex === questions.length - 1) {
+      handleEndQuiz();
+    } else {
+      setCurrentIndex((i) => i + 1);
+    }
+  }}
+  className="px-4 py-2 rounded-xl bg-[#C6FF00] text-[#0a0a0f] text-sm"
+  disabled={finishing}
+>
+  {currentIndex === questions.length - 1 ? "Submit Quiz" : "Next"}
+</button>
             {/* End Quiz button */}
             <button
               onClick={handleEndQuiz}
