@@ -120,7 +120,7 @@ export default function Layout() {
                   try {
                     const res = await finishQuiz(teamId, new Date());
                     if (res?.success) {
-                      router.push("/leaderboard");
+                      router.push("/submitted");
                     } else {
                       alert(res?.message || "Auto submit failed");
                     }
@@ -147,7 +147,7 @@ export default function Layout() {
                   try {
                     const res = await finishQuiz(teamId, new Date());
                     if (res?.success) {
-                      router.push("/leaderboard");
+                      router.push("/submitted");
                     } else {
                       alert(res?.message || "Auto submit failed");
                     }
@@ -196,7 +196,7 @@ export default function Layout() {
               try {
                 const res = await finishQuiz(teamId, new Date());
                 if (res?.success) {
-                  router.push('/leaderboard');
+                  router.push('/submitted');
                 } else {
                   alert(res?.message || 'Auto submit failed');
                 }
@@ -251,7 +251,7 @@ export default function Layout() {
     try {
       const res = await finishQuiz(teamId, new Date());
       if (res?.success) {
-        router.push("/leaderboard");
+        router.push("/submitted");
       } else {
         alert(res?.message || "Failed to finish quiz");
       }
