@@ -1,5 +1,5 @@
 "use client";
-
+import { DIFFICULTY_PRESETS } from "./question-diffuculty";
 import { useEffect, useState } from "react";
 import {
   collection,
@@ -24,6 +24,7 @@ interface Question {
   answerIndex: number;
   rewardPoints: number;
   penaltyPoints: number;
+  difficulty: "easy" | "medium" | "hard";
 }
 
 interface TeamMember {
@@ -60,9 +61,10 @@ const emptyQuestion = (): Omit<Question, "id"> => ({
   question: "",
   options: ["", "", "", ""],
   answerIndex: 0,
-  rewardPoints: 10,
-  penaltyPoints: 0,
+  difficulty: "medium",
+  ...DIFFICULTY_PRESETS.medium,
 });
+
 
 type ToastType = "success" | "error" | "info";
 interface Toast { id: string; message: string; type: ToastType; }
@@ -237,10 +239,40 @@ function QuestionModal({ initial, onSave, onClose, loading }: {
   onClose: () => void;
   loading: boolean;
 }) {
-  const [form, setForm] = useState<Omit<Question, "id"> & { id?: string }>(initial ? { ...initial } : emptyQuestion());
+  const [form, setForm] = useState<Omit<Question, "id"> & { id?: string }>(() => {
+    if (!initial) return emptyQuestion();
 
-  const setOption = (i: number, val: string) => { const opts = [...form.options]; opts[i] = val; setForm({ ...form, options: opts }); };
+    // Make edit-mode safe for old docs that may not have difficulty
+    const difficulty = (initial.difficulty ?? "medium") as "easy" | "medium" | "hard";
+    const preset = DIFFICULTY_PRESETS[difficulty];
+
+    return {
+      ...initial,
+      difficulty,
+      // If reward/penalty are missing in older docs, fallback to preset values
+      rewardPoints: typeof initial.rewardPoints === "number" ? initial.rewardPoints : preset.rewardPoints,
+      penaltyPoints: typeof initial.penaltyPoints === "number" ? initial.penaltyPoints : preset.penaltyPoints,
+    };
+  });
+
+  const applyDifficulty = (difficulty: "easy" | "medium" | "hard") => {
+    const preset = DIFFICULTY_PRESETS[difficulty];
+    setForm((prev) => ({
+      ...prev,
+      difficulty,
+      rewardPoints: preset.rewardPoints,
+      penaltyPoints: preset.penaltyPoints,
+    }));
+  };
+
+  const setOption = (i: number, val: string) => {
+    const opts = [...form.options];
+    opts[i] = val;
+    setForm({ ...form, options: opts });
+  };
+
   const addOption = () => setForm({ ...form, options: [...form.options, ""] });
+
   const removeOption = (i: number) => {
     if (form.options.length <= 2) return;
     const opts = form.options.filter((_, idx) => idx !== i);
@@ -248,7 +280,11 @@ function QuestionModal({ initial, onSave, onClose, loading }: {
   };
 
   const valid = form.question.trim() !== "" && form.options.every((o) => o.trim() !== "");
-  const handleSubmit = async () => { if (!valid) return; const { id, ...rest } = form as any; await onSave(rest, initial?.id); };
+  const handleSubmit = async () => {
+    if (!valid) return;
+    const { id, ...rest } = form as any;
+    await onSave(rest, initial?.id);
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
@@ -296,17 +332,36 @@ function QuestionModal({ initial, onSave, onClose, loading }: {
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-            <div>
+            {/* <div>
               <label className="block text-xs font-bold text-neutral-400 uppercase tracking-widest mb-2">Reward Points</label>
               <input type="number" min={0}
                 className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-green-500/50 focus:border-green-500/50 transition-all"
                 value={form.rewardPoints} onChange={(e) => setForm({ ...form, rewardPoints: Number(e.target.value) })} />
-            </div>
-            <div>
+            </div> */}
+            {/* <div>
               <label className="block text-xs font-bold text-neutral-400 uppercase tracking-widest mb-2">Penalty Points</label>
               <input type="number" min={0}
                 className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-red-500/50 focus:border-red-500/50 transition-all"
                 value={form.penaltyPoints} onChange={(e) => setForm({ ...form, penaltyPoints: Number(e.target.value) })} />
+            </div> */}
+
+            <div>
+              <label className="block text-xs font-bold text-neutral-400 uppercase tracking-widest mb-2">
+                Difficulty
+              </label>
+              <select
+                className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-green-500/50 focus:border-green-500/50 transition-all"
+                value={form.difficulty}
+                onChange={(e) => applyDifficulty(e.target.value as "easy" | "medium" | "hard")}
+              >
+                <option value="easy">Easy</option>
+                <option value="medium">Medium</option>
+                <option value="hard">Hard</option>
+              </select>
+
+              <p className="text-xs text-neutral-600 mt-2">
+                Preset: +{DIFFICULTY_PRESETS[form.difficulty].rewardPoints} / -{DIFFICULTY_PRESETS[form.difficulty].penaltyPoints}
+              </p>
             </div>
           </div>
         </div>
@@ -809,6 +864,8 @@ function TeamsTab({ teams, questions, loading, onCreateTeam, onAddMember, onRemo
 export default function AdminPanel() {
   const { toasts, push, remove } = useToast();
   const { confirm, dialog } = useConfirm();
+
+  
 
   const [activeTab, setActiveTab] = useState<"questions" | "teams" | "answers">("questions");
   const [questions, setQuestions] = useState<Question[]>([]);
