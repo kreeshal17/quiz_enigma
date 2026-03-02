@@ -758,7 +758,24 @@ function TeamsTab({ teams, questions, loading, onCreateTeam, onAddMember, onRemo
                     </div>
                     <div className="text-left">
                       <p className="font-bold text-white">{team.teamName}</p>
-                      <p className="text-xs text-neutral-600 font-mono mt-0.5">{team.teamId}</p>
+                      <p
+                        className="text-xs text-neutral-600 font-mono mt-0.5 cursor-pointer hover:text-neutral-400 transition-colors select-all"
+                        title="Click to copy Team ID"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigator.clipboard.writeText(team.teamId);
+                          const el = e.currentTarget;
+                          const orig = el.textContent;
+                          el.textContent = "Copied!";
+                          el.classList.add("text-green-400");
+                          setTimeout(() => {
+                            el.textContent = orig;
+                            el.classList.remove("text-green-400");
+                          }, 1500);
+                        }}
+                      >
+                        {team.teamId}
+                      </p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2 flex-wrap justify-end">
@@ -862,10 +879,13 @@ function TeamsTab({ teams, questions, loading, onCreateTeam, onAddMember, onRemo
 }
 
 export default function AdminPanel() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [loginEmail, setLoginEmail] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [loginError, setLoginError] = useState("");
+
   const { toasts, push, remove } = useToast();
   const { confirm, dialog } = useConfirm();
-
-  
 
   const [activeTab, setActiveTab] = useState<"questions" | "teams" | "answers">("questions");
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -877,6 +897,13 @@ export default function AdminPanel() {
   const [mModal, setMModal] = useState<{ open: boolean; teamId: string }>({ open: false, teamId: "" });
   const [assignModal, setAssignModal] = useState<{ open: boolean; team: Team | null }>({ open: false, team: null });
   const [createTeamModal, setCreateTeamModal] = useState(false);
+
+  // Check sessionStorage on mount
+  useEffect(() => {
+    if (sessionStorage.getItem("adminAuth") === "true") {
+      setIsAuthenticated(true);
+    }
+  }, []);
 
   const fetchAll = async () => {
     setFetchLoading(true);
@@ -896,7 +923,73 @@ export default function AdminPanel() {
     finally { setFetchLoading(false); }
   };
 
-  useEffect(() => { fetchAll(); }, []);
+  useEffect(() => { if (isAuthenticated) fetchAll(); }, [isAuthenticated]);
+
+  const handleLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    const envEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL;
+    const envPass = process.env.NEXT_PUBLIC_ADMIN_PASSWORD;
+    if (loginEmail === envEmail && loginPassword === envPass) {
+      setIsAuthenticated(true);
+      sessionStorage.setItem("adminAuth", "true");
+      setLoginError("");
+    } else {
+      setLoginError("Invalid email or password");
+    }
+  };
+
+  const handleLogout = () => {
+    setIsAuthenticated(false);
+    sessionStorage.removeItem("adminAuth");
+  };
+
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-neutral-950 flex items-center justify-center px-4">
+        <div className="w-full max-w-sm">
+          <div className="text-center mb-8">
+            <div className="w-14 h-14 rounded-2xl bg-neutral-900 border border-neutral-800 flex items-center justify-center mx-auto mb-4">
+              <span className="text-2xl font-black text-white">E</span>
+            </div>
+            <h1 className="text-2xl font-black text-white tracking-tight">Admin Login</h1>
+            <p className="text-sm text-neutral-500 mt-1">ENIGMA Quiz Panel</p>
+          </div>
+          <form onSubmit={handleLogin} className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 space-y-4">
+            <div>
+              <label className="block text-xs font-bold text-neutral-500 uppercase tracking-widest mb-1.5">Email</label>
+              <input
+                type="email"
+                value={loginEmail}
+                onChange={(e) => setLoginEmail(e.target.value)}
+                placeholder="admin@email.com"
+                autoFocus
+                className="w-full px-4 py-2.5 rounded-xl bg-neutral-950 border border-neutral-700 text-white text-sm placeholder-neutral-600 focus:outline-none focus:border-green-500/50 focus:ring-1 focus:ring-green-500/20 transition-all"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-neutral-500 uppercase tracking-widest mb-1.5">Password</label>
+              <input
+                type="password"
+                value={loginPassword}
+                onChange={(e) => setLoginPassword(e.target.value)}
+                placeholder="••••••••"
+                className="w-full px-4 py-2.5 rounded-xl bg-neutral-950 border border-neutral-700 text-white text-sm placeholder-neutral-600 focus:outline-none focus:border-green-500/50 focus:ring-1 focus:ring-green-500/20 transition-all"
+              />
+            </div>
+            {loginError && (
+              <p className="text-xs text-red-400 font-medium">{loginError}</p>
+            )}
+            <button
+              type="submit"
+              className="w-full py-2.5 rounded-xl text-sm font-bold bg-green-600 hover:bg-green-500 text-white transition-all"
+            >
+              Sign In
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
 
   const handleCreateTeam = async (teamName: string, members: TeamMember[]) => {
     setActionLoading(true);
@@ -1104,6 +1197,12 @@ export default function AdminPanel() {
           >
             {fetchLoading ? <Spinner size="sm" /> : <span className="font-black">↻</span>}
             <span className="hidden sm:inline">Refresh</span>
+          </button>
+          <button
+            onClick={handleLogout}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-red-400 bg-neutral-900 border border-neutral-800 hover:bg-red-950/40 hover:border-red-500/40 transition-all"
+          >
+            Logout
           </button>
         </div>
       </header>
