@@ -2,7 +2,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { getAllQuestions } from "@/app/firebase/question.controller";
-import { finishQuiz, getTeamById } from "@/app/firebase/team.controller";
+import { finishQuiz, finishRound2, getTeamById } from "@/app/firebase/team.controller";
 import { getAnswersByTeamId } from "@/app/firebase/answer.controller";
 import QuestionCard from "../QuestionCard";
 
@@ -15,7 +15,7 @@ export default function Layout() {
   const [team, setTeam] = useState<any | null>(null);
   const [questions, setQuestions] = useState<any[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [remainingSeconds, setRemainingSeconds] = useState<number>(3600);
+  const [remainingSeconds, setRemainingSeconds] = useState<number>(2400);
   const [warning, setWarning] = useState<string | null>(null);
   const [finishing, setFinishing] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -69,18 +69,28 @@ export default function Layout() {
         }
 
         const t = tRes.team;
-        const isStarted = Boolean(t.isStarted);
-        const isCompleted = Boolean(t.isCompleted);
+        const activeRound: 1 | 2 = t.currentRound ?? 1;
+        const isR2 = activeRound === 2;
 
-        if (!isStarted) {
-          setWarning("Quiz has not been started for this team.");
+        // Gate round 2
+        if (isR2 && !t.qualifiedForRound2) {
+          setWarning("Your team did not qualify for Round 2.");
+          setLoading(false);
+          return;
+        }
+
+        const effectiveStarted = isR2 ? Boolean(t.round2Started) : Boolean(t.isStarted);
+        const effectiveCompleted = isR2 ? Boolean(t.round2Completed) : Boolean(t.isCompleted);
+
+        if (!effectiveStarted) {
+          setWarning(isR2 ? "Round 2 has not been started yet." : "Quiz has not been started for this team.");
           setLoading(false);
           setTeam(t);
           return;
         }
 
-        if (isCompleted) {
-          setWarning("Quiz is already completed for this team.");
+        if (effectiveCompleted) {
+          setWarning(isR2 ? "Round 2 is already completed for this team." : "Quiz is already completed for this team.");
           setLoading(false);
           setTeam(t);
           return;
@@ -88,7 +98,7 @@ export default function Layout() {
 
         setTeam(t);
 
-        const qRes = await getAllQuestions(teamId);
+        const qRes = await getAllQuestions(teamId, activeRound);
         if (!mounted) return;
 
         if (!qRes?.success) {
@@ -114,8 +124,8 @@ export default function Layout() {
 
         setLoading(false);
 
-        // compute remaining time (1 hour total)
-        const startRaw = t.start_time;
+        // compute remaining time based on round
+        const startRaw = isR2 ? t.round2_start_time : t.start_time;
         const startDate =
           startRaw instanceof Date
             ? startRaw
@@ -125,7 +135,8 @@ export default function Layout() {
                 ? new Date(startRaw)
                 : null;
 
-        const TOTAL_SECONDS = 3600;
+        const TOTAL_SECONDS = isR2 ? 3600 : 2400; // 60 min R2, 40 min R1
+        const finishFn = isR2 ? finishRound2 : finishQuiz;
         if (startDate) {
           const endTime = startDate.getTime() + TOTAL_SECONDS * 1000;
           const initialRemaining = Math.max(0, Math.floor((endTime - Date.now()) / 1000));
@@ -140,7 +151,7 @@ export default function Layout() {
                 (async () => {
                   setFinishing(true);
                   try {
-                    const res = await finishQuiz(teamId, new Date());
+                    const res = await finishFn(teamId, new Date());
                     if (res?.success) {
                       router.push("/submitted");
                     } else {
@@ -167,7 +178,7 @@ export default function Layout() {
                 (async () => {
                   setFinishing(true);
                   try {
-                    const res = await finishQuiz(teamId, new Date());
+                    const res = await finishFn(teamId, new Date());
                     if (res?.success) {
                       router.push("/submitted");
                     } else {
@@ -216,7 +227,9 @@ export default function Layout() {
             (async () => {
               setFinishing(true);
               try {
-                const res = await finishQuiz(teamId, new Date());
+                const isR2 = team?.currentRound === 2;
+                const fn = isR2 ? finishRound2 : finishQuiz;
+                const res = await fn(teamId, new Date());
                 if (res?.success) {
                   router.push('/submitted');
                 } else {
@@ -310,7 +323,9 @@ export default function Layout() {
     if (!teamId || finishing) return;
     setFinishing(true);
     try {
-      const res = await finishQuiz(teamId, new Date());
+      const isR2 = team?.currentRound === 2;
+      const fn = isR2 ? finishRound2 : finishQuiz;
+      const res = await fn(teamId, new Date());
       if (res?.success) {
         router.push("/submitted");
       } else {
@@ -392,7 +407,16 @@ export default function Layout() {
       <div className="w-full max-w-3xl">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <div className="text-xl font-bold text-[#C6FF00] mb-2">{team?.teamName || teamId}</div>
+            <div className="flex items-center gap-3 mb-2">
+              <div className="text-xl font-bold text-[#C6FF00]">{team?.teamName || teamId}</div>
+              <span className={`text-xs font-black px-2.5 py-1 rounded-lg border ${
+                (team?.currentRound ?? 1) === 2
+                  ? 'text-purple-400 bg-purple-950/50 border-purple-500/30'
+                  : 'text-blue-400 bg-blue-950/50 border-blue-500/30'
+              }`}>
+                Round {team?.currentRound ?? 1}
+              </span>
+            </div>
             <div className="flex flex-wrap gap-2">
               {team.teamMembers &&
                 team.teamMembers.map((member: { name?: string; email?: string }, index: number) => (

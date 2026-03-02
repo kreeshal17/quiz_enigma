@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { IdCard, Zap } from "lucide-react";
-import { startQuiz } from "../firebase/team.controller";
+import { startQuiz, startRound2, getTeamById } from "../firebase/team.controller";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
@@ -22,17 +22,53 @@ export default function LoginPage() {
 
     try {
       setLoading(true);
-      const res = await startQuiz(id, new Date());
-      if (res?.success) {
-        // Quiz started successfully
-        sessionStorage.setItem("teamId", id);
-        router.push(`/quiz/${id}`);
-      } else if (res?.message?.includes("already started")) {
-        // Quiz was already started (e.g. by admin), proceed to quiz
-        sessionStorage.setItem("teamId", id);
-        router.push(`/quiz/${id}`);
+
+      // First, check team state to determine round
+      const teamRes = await getTeamById(id);
+      if (!teamRes?.success || !teamRes?.team) {
+        toast.error(teamRes?.message || "Team not found");
+        return;
+      }
+
+      const t = teamRes.team;
+      const activeRound = t.currentRound ?? 1;
+
+      if (activeRound === 1) {
+        // Round 1 flow
+        if (t.isCompleted) {
+          if (t.qualifiedForRound2) {
+            toast.info("Round 1 completed. You qualified for Round 2! Wait for admin to start it.");
+          } else {
+            toast.info("Round 1 completed. Waiting for qualification results.");
+          }
+          return;
+        }
+
+        const res = await startQuiz(id, new Date());
+        if (res?.success || res?.message?.includes("already started")) {
+          sessionStorage.setItem("teamId", id);
+          router.push(`/quiz/${id}`);
+        } else {
+          toast.error(res?.message || "Failed to start quiz");
+        }
       } else {
-        toast.error(res?.message || "Failed to start quiz");
+        // Round 2 flow
+        if (!t.qualifiedForRound2) {
+          toast.error("Your team did not qualify for Round 2.");
+          return;
+        }
+        if (t.round2Completed) {
+          router.push("/submitted");
+          return;
+        }
+
+        const res = await startRound2(id, new Date());
+        if (res?.success || res?.message?.includes("already started")) {
+          sessionStorage.setItem("teamId", id);
+          router.push(`/quiz/${id}`);
+        } else {
+          toast.error(res?.message || "Failed to start Round 2");
+        }
       }
     } catch (err) {
       console.error(err);

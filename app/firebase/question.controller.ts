@@ -5,9 +5,10 @@ interface Question {
     question: string
     options: string[]
     difficulty: "EASY" | "MEDIUM" | "HARD"
-    rewardPoints: 5 | 10 | 15
-    penaltyPoints: 2 | 5 | 10
+    rewardPoints: number
+    penaltyPoints: number
     answerIndex: number
+    round?: 1 | 2
 }
 
 export const createQuestion = async (question: Question) => {
@@ -26,7 +27,7 @@ export const createQuestion = async (question: Question) => {
     } catch (error) {
         return {
             success: false,
-            message: `Failed to create question: ${error.message}`,
+            message: `Failed to create question: ${(error as Error).message}`,
         };
     }
 }
@@ -48,7 +49,7 @@ export const updateQuestion = async (questionId: string, questionData: Question)
         // Handle errors and return failure response
         return {
             success: false,
-            message: `Failed to update question: ${error.message}`,
+            message: `Failed to update question: ${(error as Error).message}`,
         };
     }
 }
@@ -80,12 +81,12 @@ export const getQuestionById = async (questionId: string) => {
         // Handle errors and return failure response
         return {
             success: false,
-            message: `Failed to fetch question: ${error.message}`,
+            message: `Failed to fetch question: ${(error as Error).message}`,
         };
     }
 }
 
-export const getAllQuestions = async (teamId: string) => {
+export const getAllQuestions = async (teamId: string, round: 1 | 2 = 1) => {
     try {
         // Fetch team doc to read its questions array
         const teamDocRef = doc(firebasedb, 'teams', teamId);
@@ -99,7 +100,8 @@ export const getAllQuestions = async (teamId: string) => {
         }
 
         const teamData = teamSnap.data() as any;
-        const questionIds: string[] = Array.isArray(teamData?.questions) ? teamData.questions : [];
+        const questionsField = round === 2 ? 'round2Questions' : 'questions';
+        const questionIds: string[] = Array.isArray(teamData?.[questionsField]) ? teamData[questionsField] : [];
 
         if (questionIds.length === 0) {
             return {

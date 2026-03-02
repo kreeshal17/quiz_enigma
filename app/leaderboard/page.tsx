@@ -17,6 +17,12 @@ interface Team {
   totalScore: number | null;
   isCompleted: boolean;
   isStarted: boolean;
+  // Round 2
+  currentRound: number;
+  qualifiedForRound2: boolean;
+  round2Score: number | null;
+  round2TotalScore: number | null;
+  round2Completed: boolean;
 }
 
 export default function Leaderboard() {
@@ -28,6 +34,7 @@ export default function Leaderboard() {
   const [teams, setTeams] = useState<Team[]>([]);
   const [loading, setLoading] = useState(true);
   const [revealed, setRevealed] = useState(false);
+  const [roundFilter, setRoundFilter] = useState<1 | 2>(1);
 
   useEffect(() => {
     if (sessionStorage.getItem("adminAuth") === "true") {
@@ -63,6 +70,11 @@ export default function Leaderboard() {
           totalScore: raw.totalScore ?? 0,
           isCompleted: raw.isCompleted ?? false,
           isStarted: raw.isStarted ?? false,
+          currentRound: raw.currentRound ?? 1,
+          qualifiedForRound2: raw.qualifiedForRound2 ?? false,
+          round2Score: raw.round2Score ?? 0,
+          round2TotalScore: raw.round2TotalScore ?? 0,
+          round2Completed: raw.round2Completed ?? false,
         };
       });
       data.sort((a, b) => (b.marksScore ?? 0) - (a.marksScore ?? 0));
@@ -130,8 +142,16 @@ export default function Leaderboard() {
   const memberNames = (team: Team) =>
     team.teamMembers.map((m) => m.name).join(", ") || "No members";
 
-  const top3 = teams.slice(0, 3);
-  const rest = teams.slice(3);
+  // Filter and sort by active round
+  const filteredTeams = roundFilter === 2
+    ? teams.filter((t) => t.qualifiedForRound2).sort((a, b) => (b.round2Score ?? 0) - (a.round2Score ?? 0))
+    : [...teams].sort((a, b) => (b.marksScore ?? 0) - (a.marksScore ?? 0));
+
+  const getScore = (team: Team) =>
+    roundFilter === 2 ? (team.round2Score ?? 0) : (team.marksScore ?? 0);
+
+  const top3 = filteredTeams.slice(0, 3);
+  const rest = filteredTeams.slice(3);
 
   const podiumOrder =
     top3.length === 3
@@ -216,11 +236,36 @@ export default function Leaderboard() {
             textAlign: "center",
             letterSpacing: "0.05em",
             textTransform: "uppercase",
-            marginBottom: "64px",
+            marginBottom: "32px",
           }}
         >
           Enigma Quiz Championship
         </p>
+
+        {/* Round toggle */}
+        <div style={{ display: "flex", gap: "8px", justifyContent: "center", marginBottom: "48px" }}>
+          {([1, 2] as const).map((r) => (
+            <button
+              key={r}
+              onClick={() => { setRoundFilter(r); setRevealed(false); setTimeout(() => setRevealed(true), 100); }}
+              style={{
+                padding: "10px 24px",
+                borderRadius: "12px",
+                fontSize: "13px",
+                fontWeight: 700,
+                color: roundFilter === r ? "#000" : "#4e6b5a",
+                background: roundFilter === r ? "#00ff66" : "#0a120d",
+                border: roundFilter === r ? "1px solid #00ff66" : "1px solid #1a261e",
+                cursor: "pointer",
+                transition: "all 0.2s",
+                letterSpacing: "0.05em",
+                textTransform: "uppercase",
+              }}
+            >
+              Round {r}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Loading */}
@@ -399,7 +444,7 @@ export default function Leaderboard() {
                           lineHeight: 1,
                         }}
                       >
-                        {(team.marksScore ?? 0).toLocaleString()}
+                        {getScore(team).toLocaleString()}
                       </p>
                       <p
                         style={{
@@ -521,7 +566,7 @@ export default function Leaderboard() {
                             color: "#00ff66",
                           }}
                         >
-                          {(team.marksScore ?? 0).toLocaleString()}
+                          {getScore(team).toLocaleString()}
                         </p>
                         <p
                           style={{

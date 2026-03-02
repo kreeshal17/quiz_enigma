@@ -25,6 +25,7 @@ interface Question {
   rewardPoints: number;
   penaltyPoints: number;
   difficulty: "easy" | "medium" | "hard";
+  round: 1 | 2;
 }
 
 interface TeamMember {
@@ -43,6 +44,16 @@ interface Team {
   end_time: Date | null;
   marksScore: number | null;
   totalScore: number | null;
+  // Round 2 fields
+  currentRound: 1 | 2;
+  qualifiedForRound2: boolean;
+  round2Questions: string[];
+  round2Score: number | null;
+  round2TotalScore: number | null;
+  round2Started: boolean;
+  round2Completed: boolean;
+  round2_start_time: Date | null;
+  round2_end_time: Date | null;
 }
 
 interface Answer {
@@ -62,6 +73,7 @@ const emptyQuestion = (): Omit<Question, "id"> => ({
   options: ["", "", "", ""],
   answerIndex: 0,
   difficulty: "medium",
+  round: 1,
   ...DIFFICULTY_PRESETS.medium,
 });
 
@@ -252,6 +264,7 @@ function QuestionModal({ initial, onSave, onClose, loading }: {
       // If reward/penalty are missing in older docs, fallback to preset values
       rewardPoints: typeof initial.rewardPoints === "number" ? initial.rewardPoints : preset.rewardPoints,
       penaltyPoints: typeof initial.penaltyPoints === "number" ? initial.penaltyPoints : preset.penaltyPoints,
+      round: initial.round ?? 1,
     };
   });
 
@@ -361,6 +374,23 @@ function QuestionModal({ initial, onSave, onClose, loading }: {
 
               <p className="text-xs text-neutral-600 mt-2">
                 Preset: +{DIFFICULTY_PRESETS[form.difficulty].rewardPoints} / -{DIFFICULTY_PRESETS[form.difficulty].penaltyPoints}
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-neutral-400 uppercase tracking-widest mb-2">
+                Round
+              </label>
+              <select
+                className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-green-500/50 focus:border-green-500/50 transition-all"
+                value={form.round}
+                onChange={(e) => setForm({ ...form, round: Number(e.target.value) as 1 | 2 })}
+              >
+                <option value={1}>Round 1</option>
+                <option value={2}>Round 2</option>
+              </select>
+              <p className="text-xs text-neutral-600 mt-2">
+                {form.round === 1 ? "Assigned to teams on creation" : "Assigned when promoted to R2"}
               </p>
             </div>
           </div>
@@ -487,7 +517,14 @@ function QuestionsTab({ questions, loading, onAdd, onEdit, onDelete }: {
   onAdd: () => void; onEdit: (q: Question) => void; onDelete: (id: string) => void;
 }) {
   const [search, setSearch] = useState("");
-  const filtered = questions.filter((q) => q.question.toLowerCase().includes(search.toLowerCase()));
+  const [roundFilter, setRoundFilter] = useState<"all" | "1" | "2">("all");
+  const [diffFilter, setDiffFilter] = useState<"all" | "easy" | "medium" | "hard">("all");
+  const filtered = questions.filter((q) => {
+    const matchesSearch = search === "" || q.question.toLowerCase().includes(search.toLowerCase()) || q.id.toLowerCase().includes(search.toLowerCase()) || q.difficulty.toLowerCase().includes(search.toLowerCase());
+    const matchesRound = roundFilter === "all" || String(q.round ?? 1) === roundFilter;
+    const matchesDiff = diffFilter === "all" || q.difficulty.toLowerCase() === diffFilter;
+    return matchesSearch && matchesRound && matchesDiff;
+  });
 
   return (
     <div>
@@ -501,13 +538,32 @@ function QuestionsTab({ questions, loading, onAdd, onEdit, onDelete }: {
         </button>
       </div>
 
-      <div className="relative mb-6">
+      <div className="flex flex-col sm:flex-row gap-3 mb-6">
         <input
-          className="w-full bg-neutral-900/80 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-white placeholder-neutral-600 focus:outline-none focus:ring-2 focus:ring-green-500/40 focus:border-green-500/40 transition-all"
-          placeholder="Search questions…"
+          className="flex-1 bg-neutral-900/80 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-white placeholder-neutral-600 focus:outline-none focus:ring-2 focus:ring-green-500/40 focus:border-green-500/40 transition-all"
+          placeholder="Search questions, ID, difficulty…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
+        <select
+          value={roundFilter}
+          onChange={(e) => setRoundFilter(e.target.value as any)}
+          className="bg-neutral-900/80 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-green-500/40 transition-all"
+        >
+          <option value="all">All Rounds</option>
+          <option value="1">Round 1</option>
+          <option value="2">Round 2</option>
+        </select>
+        <select
+          value={diffFilter}
+          onChange={(e) => setDiffFilter(e.target.value as any)}
+          className="bg-neutral-900/80 border border-neutral-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-green-500/40 transition-all"
+        >
+          <option value="all">All Difficulties</option>
+          <option value="easy">Easy</option>
+          <option value="medium">Medium</option>
+          <option value="hard">Hard</option>
+        </select>
       </div>
 
       {loading ? (
@@ -528,6 +584,7 @@ function QuestionsTab({ questions, loading, onAdd, onEdit, onDelete }: {
                 <div className="flex-1 min-w-0">
                   <div className="flex flex-wrap items-center gap-2 mb-3">
                     <span className="text-xs font-black text-neutral-500 bg-neutral-800 border border-neutral-700 px-2.5 py-1 rounded-lg font-mono">Q{idx + 1}</span>
+                    <span className={`text-xs font-bold px-2.5 py-1 rounded-lg border ${(q.round ?? 1) === 2 ? 'text-purple-400 bg-purple-950/50 border-purple-500/30' : 'text-blue-400 bg-blue-950/50 border-blue-500/30'}`}>R{q.round ?? 1}</span>
                     <span className="text-xs font-bold text-green-400 bg-green-950/50 border border-green-500/30 px-2.5 py-1 rounded-lg">+{q.rewardPoints} pts</span>
                     {q.penaltyPoints > 0 && <span className="text-xs font-bold text-red-400 bg-red-950/50 border border-red-500/30 px-2.5 py-1 rounded-lg">-{q.penaltyPoints} penalty</span>}
                     <span className="text-xs text-neutral-700 font-mono hidden sm:inline ml-1">{q.id}</span>
@@ -707,18 +764,24 @@ function AnswersTab({ teams, questions, loading }: { teams: Team[]; questions: Q
   );
 }
 
-function TeamsTab({ teams, questions, loading, onCreateTeam, onAddMember, onRemoveMember, onAssignQuestions, onToggleStart, onToggleComplete }: {
+function TeamsTab({ teams, questions, loading, onCreateTeam, onAddMember, onRemoveMember, onAssignQuestions, onToggleStart, onToggleComplete, onPromoteToR2, onToggleR2Start, onToggleR2Complete }: {
   teams: Team[]; questions: Question[]; loading: boolean;
   onCreateTeam: () => void; onAddMember: (teamId: string) => void;
   onRemoveMember: (teamId: string, email: string) => void; onAssignQuestions: (team: Team) => void;
   onToggleStart: (team: Team) => void; onToggleComplete: (team: Team) => void;
+  onPromoteToR2: (team: Team) => void; onToggleR2Start: (team: Team) => void; onToggleR2Complete: (team: Team) => void;
 }) {
   const [expandedTeam, setExpandedTeam] = useState<string | null>(null);
   const qMap = Object.fromEntries(questions.map((q) => [q.id, q]));
 
   const statusMeta = (team: Team) => {
-    if (team.isCompleted) return { label: "Completed", cls: "bg-green-950/50 text-green-400 border-green-500/40" };
-    if (team.isStarted) return { label: "In Progress", cls: "bg-neutral-800 text-neutral-300 border-neutral-600" };
+    if ((team.currentRound ?? 1) === 2) {
+      if (team.round2Completed) return { label: "R2 Done", cls: "bg-green-950/50 text-green-400 border-green-500/40" };
+      if (team.round2Started) return { label: "R2 Live", cls: "bg-blue-950/50 text-blue-400 border-blue-500/40" };
+      return { label: "R2 Pending", cls: "bg-purple-950/50 text-purple-400 border-purple-500/40" };
+    }
+    if (team.isCompleted) return { label: "R1 Done", cls: "bg-green-950/50 text-green-400 border-green-500/40" };
+    if (team.isStarted) return { label: "R1 Live", cls: "bg-neutral-800 text-neutral-300 border-neutral-600" };
     return { label: "Not Started", cls: "bg-neutral-900 text-neutral-600 border-neutral-800" };
   };
 
@@ -789,10 +852,10 @@ function TeamsTab({ teams, questions, loading, onCreateTeam, onAddMember, onRemo
                   <div className="border-t border-neutral-800 px-6 py-6 space-y-6">
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                       {[
-                        { label: "Questions", value: team.questions.length },
-                        { label: "Score", value: team.marksScore !== null ? `${team.marksScore} / ${team.totalScore ?? "?"}` : "—" },
-                        { label: "Start", value: team.start_time ? new Date(team.start_time).toLocaleTimeString() : "—" },
-                        { label: "End", value: team.end_time ? new Date(team.end_time).toLocaleTimeString() : "—" },
+                        { label: "R1 Questions", value: team.questions.length },
+                        { label: "R1 Score", value: team.marksScore !== null ? team.marksScore : "—" },
+                        { label: "R1 Start", value: team.start_time ? new Date(team.start_time).toLocaleTimeString() : "—" },
+                        { label: "R1 End", value: team.end_time ? new Date(team.end_time).toLocaleTimeString() : "—" },
                       ].map((s) => (
                         <div key={s.label} className="bg-neutral-800/60 rounded-xl px-4 py-3 text-center border border-neutral-700/60">
                           <p className="text-xs text-neutral-500 mb-1 uppercase tracking-widest font-bold">{s.label}</p>
@@ -800,6 +863,23 @@ function TeamsTab({ teams, questions, loading, onCreateTeam, onAddMember, onRemo
                         </div>
                       ))}
                     </div>
+
+                    {/* Round 2 stats — shown when promoted */}
+                    {(team.currentRound ?? 1) === 2 && (
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        {[
+                          { label: "R2 Questions", value: team.round2Questions.length },
+                          { label: "R2 Score", value: team.round2Score !== null ? team.round2Score : "—" },
+                          { label: "R2 Start", value: team.round2_start_time ? new Date(team.round2_start_time).toLocaleTimeString() : "—" },
+                          { label: "R2 End", value: team.round2_end_time ? new Date(team.round2_end_time).toLocaleTimeString() : "—" },
+                        ].map((s) => (
+                          <div key={s.label} className="bg-blue-950/20 rounded-xl px-4 py-3 text-center border border-blue-500/20">
+                            <p className="text-xs text-blue-400/60 mb-1 uppercase tracking-widest font-bold">{s.label}</p>
+                            <p className="text-sm font-black text-blue-300">{s.value}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
 
                     <div className="flex flex-wrap gap-2">
                       <button onClick={() => onAssignQuestions(team)} className="px-4 py-2 rounded-xl text-xs font-bold text-neutral-300 bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 hover:border-neutral-600 transition-all">
@@ -811,7 +891,7 @@ function TeamsTab({ teams, questions, loading, onCreateTeam, onAddMember, onRemo
                             ? "text-neutral-300 bg-neutral-800 hover:bg-neutral-700 border-neutral-700"
                             : "text-green-400 bg-green-950/40 hover:bg-green-950/60 border-green-500/40 hover:border-green-500/60"
                         }`}>
-                        {team.isStarted ? "Pause Quiz" : "Start Quiz"}
+                        {team.isStarted ? "Pause R1" : "Start R1"}
                       </button>
                       <button onClick={() => onToggleComplete(team)} disabled={!team.isStarted}
                         className={`px-4 py-2 rounded-xl text-xs font-bold border transition-all disabled:opacity-40 ${
@@ -819,8 +899,38 @@ function TeamsTab({ teams, questions, loading, onCreateTeam, onAddMember, onRemo
                             ? "text-neutral-400 bg-neutral-800 hover:bg-neutral-700 border-neutral-700"
                             : "text-red-400 bg-red-950/40 hover:bg-red-950/60 border-red-500/40 hover:border-red-500/60"
                         }`}>
-                        {team.isCompleted ? "Reopen Quiz" : "Mark Complete"}
+                        {team.isCompleted ? "Reopen R1" : "Complete R1"}
                       </button>
+
+                      {/* Promote to Round 2 — only when R1 done and not yet promoted */}
+                      {(team.currentRound ?? 1) === 1 && team.isCompleted && !team.qualifiedForRound2 && (
+                        <button onClick={() => onPromoteToR2(team)}
+                          className="px-4 py-2 rounded-xl text-xs font-bold text-purple-400 bg-purple-950/40 hover:bg-purple-950/60 border border-purple-500/40 hover:border-purple-500/60 transition-all">
+                          ⬆ Promote to R2
+                        </button>
+                      )}
+
+                      {/* Round 2 controls — only shown for promoted teams */}
+                      {(team.currentRound ?? 1) === 2 && (
+                        <>
+                          <button onClick={() => onToggleR2Start(team)} disabled={team.round2Completed}
+                            className={`px-4 py-2 rounded-xl text-xs font-bold border transition-all disabled:opacity-40 ${
+                              team.round2Started
+                                ? "text-blue-300 bg-blue-950/40 hover:bg-blue-950/60 border-blue-500/40"
+                                : "text-blue-400 bg-blue-950/40 hover:bg-blue-950/60 border-blue-500/40 hover:border-blue-500/60"
+                            }`}>
+                            {team.round2Started ? "Pause R2" : "Start R2"}
+                          </button>
+                          <button onClick={() => onToggleR2Complete(team)} disabled={!team.round2Started}
+                            className={`px-4 py-2 rounded-xl text-xs font-bold border transition-all disabled:opacity-40 ${
+                              team.round2Completed
+                                ? "text-neutral-400 bg-neutral-800 hover:bg-neutral-700 border-neutral-700"
+                                : "text-red-400 bg-red-950/40 hover:bg-red-950/60 border-red-500/40 hover:border-red-500/60"
+                            }`}>
+                            {team.round2Completed ? "Reopen R2" : "Complete R2"}
+                          </button>
+                        </>
+                      )}
                     </div>
 
                     <div>
@@ -917,6 +1027,16 @@ export default function AdminPanel() {
           questions: data.questions ?? [], isStarted: data.isStarted ?? false, isCompleted: data.isCompleted ?? false,
           start_time: data.start_time?.toDate?.() ?? null, end_time: data.end_time?.toDate?.() ?? null,
           marksScore: data.marksScore ?? null, totalScore: data.totalScore ?? null,
+          // Round 2
+          currentRound: data.currentRound ?? 1,
+          qualifiedForRound2: data.qualifiedForRound2 ?? false,
+          round2Questions: data.round2Questions ?? [],
+          round2Score: data.round2Score ?? null,
+          round2TotalScore: data.round2TotalScore ?? null,
+          round2Started: data.round2Started ?? false,
+          round2Completed: data.round2Completed ?? false,
+          round2_start_time: data.round2_start_time?.toDate?.() ?? null,
+          round2_end_time: data.round2_end_time?.toDate?.() ?? null,
         };
       }));
     } catch (e) { push("Failed to load data from Firebase.", "error"); }
@@ -995,8 +1115,10 @@ export default function AdminPanel() {
     setActionLoading(true);
     try {
       const newTeamRef = doc(collection(firebasedb, "teams"));
-      const allQuestionIds = questions.map((q) => q.id);
-      const totalScore = questions.reduce((sum, q) => sum + (q.rewardPoints ?? 0), 0);
+      // Only auto-assign round 1 questions
+      const r1Questions = questions.filter((q) => (q.round ?? 1) === 1);
+      const allQuestionIds = r1Questions.map((q) => q.id);
+      const totalScore = r1Questions.reduce((sum, q) => sum + (q.rewardPoints ?? 0), 0);
       const teamData = {
         teamName,
         teamMembers: members,
@@ -1007,6 +1129,16 @@ export default function AdminPanel() {
         end_time: null,
         marksScore: 0,
         totalScore,
+        // Round 2 defaults
+        currentRound: 1 as const,
+        qualifiedForRound2: false,
+        round2Questions: [] as string[],
+        round2Score: 0,
+        round2TotalScore: 0,
+        round2Started: false,
+        round2Completed: false,
+        round2_start_time: null,
+        round2_end_time: null,
       };
       await setDoc(newTeamRef, teamData);
       setTeams((p) => [...p, { teamId: newTeamRef.id, ...teamData }]);
@@ -1032,7 +1164,7 @@ export default function AdminPanel() {
         const ref = await addDoc(collection(firebasedb, "questions"), { ...data });
         const newId = ref.id;
   
-        if (teams.length > 0) {
+        if (teams.length > 0 && (data.round ?? 1) === 1) {
           await Promise.all(
             teams.map((t) =>
               updateDoc(doc(firebasedb, "teams", t.teamId), {
@@ -1167,6 +1299,77 @@ export default function AdminPanel() {
     finally { setActionLoading(false); }
   };
 
+  // ====== Round 2 Admin Handlers ======
+
+  const handlePromoteToRound2 = async (team: Team) => {
+    const ok = await confirm(`Promote "${team.teamName}" to Round 2? All Round 1 data will be preserved.`);
+    if (!ok) return;
+    setActionLoading(true);
+    try {
+      // Fetch round 2 questions from the local questions state
+      const r2Ids = questions.filter((q) => (q.round ?? 1) === 2).map((q) => q.id);
+
+      if (r2Ids.length === 0) {
+        push("No Round 2 questions found. Add questions with round=2 first.", "error");
+        setActionLoading(false);
+        return;
+      }
+
+      // Shuffle
+      const shuffled = [...r2Ids].sort(() => Math.random() - 0.5);
+
+      const r2Fields = {
+        currentRound: 2 as const,
+        qualifiedForRound2: true,
+        round2Questions: shuffled,
+        round2Score: 0,
+        round2TotalScore: 0,
+        round2Started: false,
+        round2Completed: false,
+        round2_start_time: null,
+        round2_end_time: null,
+      };
+
+      await updateDoc(doc(firebasedb, "teams", team.teamId), r2Fields);
+      setTeams((p) => p.map((t) => t.teamId === team.teamId ? { ...t, ...r2Fields } : t));
+      push(`"${team.teamName}" promoted to Round 2 with ${shuffled.length} questions!`, "success");
+    } catch (e) {
+      push(`Failed to promote: ${(e as Error).message}`, "error");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleToggleR2Start = async (team: Team) => {
+    const newStarted = !team.round2Started;
+    const ok = await confirm(newStarted ? `Start Round 2 for "${team.teamName}"?` : `Pause Round 2 for "${team.teamName}"?`);
+    if (!ok) return;
+    setActionLoading(true);
+    try {
+      const updates: Record<string, any> = { round2Started: newStarted };
+      if (newStarted && !team.round2_start_time) updates.round2_start_time = serverTimestamp();
+      await updateDoc(doc(firebasedb, "teams", team.teamId), updates);
+      setTeams((p) => p.map((t) => t.teamId === team.teamId ? { ...t, round2Started: newStarted, round2_start_time: newStarted && !t.round2_start_time ? new Date() : t.round2_start_time } : t));
+      push(`Round 2 ${newStarted ? "started" : "paused"}.`, "success");
+    } catch (e) { push(`Failed: ${(e as Error).message}`, "error"); }
+    finally { setActionLoading(false); }
+  };
+
+  const handleToggleR2Complete = async (team: Team) => {
+    const newCompleted = !team.round2Completed;
+    const ok = await confirm(newCompleted ? `Mark Round 2 complete for "${team.teamName}"?` : `Reopen Round 2 for "${team.teamName}"?`);
+    if (!ok) return;
+    setActionLoading(true);
+    try {
+      const updates: Record<string, any> = { round2Completed: newCompleted };
+      if (newCompleted) updates.round2_end_time = serverTimestamp();
+      await updateDoc(doc(firebasedb, "teams", team.teamId), updates);
+      setTeams((p) => p.map((t) => t.teamId === team.teamId ? { ...t, round2Completed: newCompleted, round2_end_time: newCompleted ? new Date() : t.round2_end_time } : t));
+      push(`Round 2 ${newCompleted ? "completed" : "reopened"}.`, "success");
+    } catch (e) { push(`Failed: ${(e as Error).message}`, "error"); }
+    finally { setActionLoading(false); }
+  };
+
   const tabs = [
     { key: "questions" as const, label: "Questions", count: questions.length },
     { key: "teams" as const, label: "Teams", count: teams.length },
@@ -1246,7 +1449,10 @@ export default function AdminPanel() {
             onRemoveMember={handleRemoveMember}
             onAssignQuestions={(team) => setAssignModal({ open: true, team })}
             onToggleStart={handleToggleStart}
-            onToggleComplete={handleToggleComplete} />
+            onToggleComplete={handleToggleComplete}
+            onPromoteToR2={handlePromoteToRound2}
+            onToggleR2Start={handleToggleR2Start}
+            onToggleR2Complete={handleToggleR2Complete} />
         )}
         {activeTab === "answers" && <AnswersTab teams={teams} questions={questions} loading={fetchLoading} />}
       </main>

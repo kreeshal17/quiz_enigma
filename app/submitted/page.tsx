@@ -30,6 +30,11 @@ export default function SubmittedPage() {
           Results will be announced soon
         </div>
 
+        <p className="mt-6 text-yellow-400/80 text-sm font-medium leading-relaxed">
+          Please wait until the results are out for Round 2. <br />
+          Qualified teams will be notified to proceed.
+        </p>
+
         <p className="mt-10 text-[#9aa0a6]/40 text-xs tracking-wider">
           ENIGMA &copy; {new Date().getFullYear()} &middot; Power Card Challenge
         </p>

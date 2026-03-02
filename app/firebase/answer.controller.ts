@@ -37,6 +37,10 @@ export const createAnswer = async (answer: Answer) => {
             const isCorrect = (answer.selectedOptionIndex === questionData.answerIndex);
             const mark = isCorrect ? Number(questionData.rewardPoints || 0) : -Number(questionData.penaltyPoints || 0);
 
+            // Use separate score field for each round — Round 1 marksScore is NEVER overwritten by Round 2
+            const isRound2 = teamData.currentRound === 2;
+            const scoreField = isRound2 ? 'round2Score' : 'marksScore';
+
             if (existingAnsSnap.exists()) {
                 const prev = existingAnsSnap.data() as any;
                 const prevMark = typeof prev.mark === "number" ? prev.mark : 0;
@@ -49,9 +53,9 @@ export const createAnswer = async (answer: Answer) => {
                     timestamp: answer.timestamp,
                 });
 
-                // update team's marksScore by difference
-                const newMarksScore = (Number(teamData.marksScore || 0) + (mark - prevMark));
-                transaction.update(teamDocRef, { marksScore: newMarksScore });
+                // update team's score by difference
+                const newScore = (Number(teamData[scoreField] || 0) + (mark - prevMark));
+                transaction.update(teamDocRef, { [scoreField]: newScore });
             } else {
                 // create new answer doc
                 transaction.set(answerDocRef, {
@@ -63,9 +67,9 @@ export const createAnswer = async (answer: Answer) => {
                     timestamp: answer.timestamp,
                 });
 
-                // increment team's marksScore
-                const newMarksScore = Number(teamData.marksScore || 0) + mark;
-                transaction.update(teamDocRef, { marksScore: newMarksScore });
+                // increment team's score
+                const newScore = Number(teamData[scoreField] || 0) + mark;
+                transaction.update(teamDocRef, { [scoreField]: newScore });
             }
         });
         console.log('controller here2');
