@@ -24,15 +24,19 @@ export default function LoginPage() {
       setLoading(true);
       const res = await startQuiz(id, new Date());
       if (res?.success) {
-        // optionally persist teamId for the quiz page
+        // Quiz started successfully
         sessionStorage.setItem("teamId", id);
-        router.push(`/quiz/${teamId}`);
+        router.push(`/quiz/${id}`);
+      } else if (res?.message?.includes("already started")) {
+        // Quiz was already started (e.g. by admin), proceed to quiz
+        sessionStorage.setItem("teamId", id);
+        router.push(`/quiz/${id}`);
       } else {
         toast.error(res?.message || "Failed to start quiz");
       }
     } catch (err) {
       console.error(err);
-      alert("Failed to start quiz");
+      toast.error("Failed to start quiz");
     } finally {
       setLoading(false);
     }
