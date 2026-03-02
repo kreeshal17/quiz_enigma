@@ -42,16 +42,24 @@ export default function Leaderboard() {
     }
   }, []);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    const envEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL;
-    const envPass = process.env.NEXT_PUBLIC_ADMIN_PASSWORD;
-    if (loginEmail === envEmail && loginPassword === envPass) {
-      setIsAuthenticated(true);
-      sessionStorage.setItem("adminAuth", "true");
-      setLoginError("");
-    } else {
-      setLoginError("Invalid email or password");
+    try {
+      const res = await fetch("/api/admin-login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: loginEmail, password: loginPassword }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setIsAuthenticated(true);
+        sessionStorage.setItem("adminAuth", "true");
+        setLoginError("");
+      } else {
+        setLoginError("Invalid email or password");
+      }
+    } catch {
+      setLoginError("Login failed. Please try again.");
     }
   };
 
