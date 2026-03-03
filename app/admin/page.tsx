@@ -1043,6 +1043,8 @@ export default function AdminPanel() {
           round2Completed: data.round2Completed ?? false,
           round2_start_time: data.round2_start_time?.toDate?.() ?? null,
           round2_end_time: data.round2_end_time?.toDate?.() ?? null,
+          isPaused: data.isPaused ?? false,
+          round2Paused: data.round2Paused ?? false,
         };
       }));
     } catch (e) { push("Failed to load data from Firebase.", "error"); }
