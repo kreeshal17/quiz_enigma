@@ -7,6 +7,7 @@ type QuestionProp = {
   firebaseId?: string;
   question?: string;
   options?: string[];
+  difficulty?: string;
   // other fields if needed
 };
 
@@ -55,7 +56,20 @@ const QuestionCard: React.FC<{
 
   return (
     <div>
-      <h3 className="text-lg font-semibold mb-4">{question.question}</h3>
+      <div className="flex items-start gap-3 mb-4">
+        <h3 className="text-lg font-semibold flex-1">{question.question}</h3>
+        {question.difficulty && (
+          <span className={`shrink-0 text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-lg border ${
+            question.difficulty.toLowerCase() === 'easy'
+              ? 'text-green-400 bg-green-950/40 border-green-500/30'
+              : question.difficulty.toLowerCase() === 'medium'
+                ? 'text-yellow-400 bg-yellow-950/40 border-yellow-500/30'
+                : 'text-red-400 bg-red-950/40 border-red-500/30'
+          }`}>
+            {question.difficulty}
+          </span>
+        )}
+      </div>
       <div className="space-y-3">
         {(question.options || []).map((opt: string, i: number) => {
           const isSelected = selectedIndex === i;

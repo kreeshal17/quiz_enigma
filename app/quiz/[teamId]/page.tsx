@@ -1,8 +1,10 @@
 "use client";
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { doc, onSnapshot } from "firebase/firestore";
+import { firebasedb } from "@/app/firebase/firebase.config";
 import { getAllQuestions } from "@/app/firebase/question.controller";
-import { finishQuiz, finishRound2, getTeamById } from "@/app/firebase/team.controller";
+import { finishQuiz, finishRound2 } from "@/app/firebase/team.controller";
 import { getAnswersByTeamId } from "@/app/firebase/answer.controller";
 import QuestionCard from "../QuestionCard";
 
@@ -19,6 +21,8 @@ export default function Layout() {
   const [warning, setWarning] = useState<string | null>(null);
   const [finishing, setFinishing] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
+  const [showConfirmEnd, setShowConfirmEnd] = useState(false);
 
   // map of questionId -> selectedOptionIndex
   const [answersMap, setAnswersMap] = useState<Record<string, number>>({});
@@ -27,6 +31,8 @@ export default function Layout() {
   // tab switch tracking
   const tabSwitchCountRef = useRef(0);
   const [tabWarning, setTabWarning] = useState<string | null>(null);
+  // pause tracking for timer
+  const pausedRef = useRef(false);
 
   // mark for later
   const [markedQuestions, setMarkedQuestions] = useState<Set<string>>(new Set());
@@ -45,7 +51,7 @@ export default function Layout() {
     if (markedQuestions.size > 0) {
       setShowSubmitWarning(true);
     } else {
-      handleEndQuiz();
+      setShowConfirmEnd(true);
     }
   };
 
@@ -59,16 +65,24 @@ export default function Layout() {
       setLoading(true);
       setWarning(null);
       try {
-        const tRes = await getTeamById(teamId);
-        if (!mounted) return;
+        // Initial fetch via onSnapshot's first call will be handled below
+        // but we need questions and answers loaded too
+        const teamDocRef = doc(firebasedb, "teams", teamId);
+        const snap = await new Promise<any>((resolve) => {
+          const unsub = onSnapshot(teamDocRef, (s) => {
+            resolve(s);
+            unsub();
+          });
+        });
 
-        if (!tRes?.success || !tRes.team) {
+        if (!mounted) return;
+        if (!snap.exists()) {
           setWarning("Team not found.");
           setLoading(false);
           return;
         }
 
-        const t = tRes.team;
+        const t = { id: snap.id, ...snap.data() };
         const activeRound: 1 | 2 = t.currentRound ?? 1;
         const isR2 = activeRound === 2;
 
@@ -83,9 +97,84 @@ export default function Layout() {
         const effectiveCompleted = isR2 ? Boolean(t.round2Completed) : Boolean(t.isCompleted);
 
         if (!effectiveStarted) {
-          setWarning(isR2 ? "Round 2 has not been started yet." : "Quiz has not been started for this team.");
-          setLoading(false);
+          // Don't show warning immediately — wait for real-time update
+          // The onSnapshot listener will pick up the change when isStarted becomes true
           setTeam(t);
+          setLoading(true);
+          // Set up a real-time listener that waits for started state
+          const waitUnsub = onSnapshot(teamDocRef, async (waitSnap) => {
+            if (!mounted || !waitSnap.exists()) return;
+            const waitData = waitSnap.data() as any;
+            const nowStarted = isR2 ? Boolean(waitData.round2Started) : Boolean(waitData.isStarted);
+            if (nowStarted) {
+              waitUnsub();
+              // Re-trigger the full load by reloading the page state
+              setTeam({ id: waitSnap.id, ...waitData });
+              // Continue loading questions and answers
+              const qRes2 = await getAllQuestions(teamId, activeRound);
+              if (!mounted) return;
+              if (qRes2?.success) {
+                setQuestions(Array.isArray(qRes2.questions) ? qRes2.questions : []);
+              }
+              const aRes2 = await getAnswersByTeamId(teamId);
+              if (mounted && aRes2?.success && Array.isArray(aRes2.answers)) {
+                const map2: Record<string, number> = {};
+                for (const a of aRes2.answers) {
+                  if (a.questionId && typeof a.selectedOptionIndex === "number") {
+                    map2[a.questionId] = a.selectedOptionIndex;
+                  }
+                }
+                setAnswersMap(map2);
+              }
+              // Set up timer
+              const sd = waitData;
+              const startRaw2 = isR2 ? sd.round2_start_time : sd.start_time;
+              const startDate2 =
+                startRaw2 instanceof Date
+                  ? startRaw2
+                  : startRaw2 && typeof startRaw2.toDate === "function"
+                    ? startRaw2.toDate()
+                    : startRaw2
+                      ? new Date(startRaw2)
+                      : null;
+              const TOTAL2 = isR2 ? 3600 : 2400;
+              const finishFn2 = isR2 ? finishRound2 : finishQuiz;
+              const submittedUrl2 = isR2 ? "/submitted?round=2" : "/submitted?round=1";
+              if (startDate2) {
+                const endTime2 = startDate2.getTime() + TOTAL2 * 1000;
+                setRemainingSeconds(Math.max(0, Math.floor((endTime2 - Date.now()) / 1000)));
+              } else {
+                setRemainingSeconds(TOTAL2);
+              }
+              iv = setInterval(() => {
+                if (pausedRef.current) return;
+                setRemainingSeconds((prev) => {
+                  const next = Math.max(0, prev - 1);
+                  if (next === 0 && !autoSubmittedRef.current) {
+                    autoSubmittedRef.current = true;
+                    if (iv) clearInterval(iv);
+                    (async () => {
+                      setFinishing(true);
+                      try {
+                        const res = await finishFn2(teamId, new Date());
+                        if (res?.success) router.push(submittedUrl2);
+                        else alert(res?.message || "Auto submit failed");
+                      } catch (err) { console.error("Auto submit failed:", err); }
+                      finally { setFinishing(false); }
+                    })();
+                  }
+                  return next;
+                });
+              }, 1000);
+              setLoading(false);
+            }
+          });
+
+          return () => {
+            mounted = false;
+            waitUnsub();
+            if (iv) clearInterval(iv);
+          };
           return;
         }
 
@@ -95,6 +184,11 @@ export default function Layout() {
           setTeam(t);
           return;
         }
+
+        // Check initial pause state
+        const effectivePaused = isR2 ? Boolean(t.round2Paused) : Boolean(t.isPaused);
+        setIsPaused(effectivePaused);
+        pausedRef.current = effectivePaused;
 
         setTeam(t);
 
@@ -137,12 +231,15 @@ export default function Layout() {
 
         const TOTAL_SECONDS = isR2 ? 3600 : 2400; // 60 min R2, 40 min R1
         const finishFn = isR2 ? finishRound2 : finishQuiz;
+        const submittedUrl = isR2 ? "/submitted?round=2" : "/submitted?round=1";
         if (startDate) {
           const endTime = startDate.getTime() + TOTAL_SECONDS * 1000;
           const initialRemaining = Math.max(0, Math.floor((endTime - Date.now()) / 1000));
           setRemainingSeconds(initialRemaining);
 
           iv = setInterval(() => {
+            // Don't tick down when paused
+            if (pausedRef.current) return;
             setRemainingSeconds((prev) => {
               const next = Math.max(0, prev - 1);
               if (next === 0 && !autoSubmittedRef.current) {
@@ -153,7 +250,7 @@ export default function Layout() {
                   try {
                     const res = await finishFn(teamId, new Date());
                     if (res?.success) {
-                      router.push("/submitted");
+                      router.push(submittedUrl);
                     } else {
                       alert(res?.message || "Auto submit failed");
                     }
@@ -170,6 +267,7 @@ export default function Layout() {
         } else {
           setRemainingSeconds(TOTAL_SECONDS);
           iv = setInterval(() => {
+            if (pausedRef.current) return;
             setRemainingSeconds((prev) => {
               const next = Math.max(0, prev - 1);
               if (next === 0 && !autoSubmittedRef.current) {
@@ -180,7 +278,7 @@ export default function Layout() {
                   try {
                     const res = await finishFn(teamId, new Date());
                     if (res?.success) {
-                      router.push("/submitted");
+                      router.push(submittedUrl);
                     } else {
                       alert(res?.message || "Auto submit failed");
                     }
@@ -208,6 +306,33 @@ export default function Layout() {
     };
   }, [teamId, router]);
 
+  // ── Real-time Firestore listener for pause / force-complete ──
+  useEffect(() => {
+    if (!teamId) return;
+    const teamDocRef = doc(firebasedb, "teams", teamId);
+
+    const unsub = onSnapshot(teamDocRef, (snap) => {
+      if (!snap.exists()) return;
+      const data = snap.data() as any;
+      const activeRound: 1 | 2 = data.currentRound ?? 1;
+      const isR2 = activeRound === 2;
+
+      // Detect pause
+      const paused = isR2 ? Boolean(data.round2Paused) : Boolean(data.isPaused);
+      setIsPaused(paused);
+      pausedRef.current = paused;
+
+      // Detect force-complete by admin
+      const completed = isR2 ? Boolean(data.round2Completed) : Boolean(data.isCompleted);
+      if (completed && !autoSubmittedRef.current) {
+        autoSubmittedRef.current = true;
+        router.push(isR2 ? "/submitted?round=2" : "/submitted?round=1");
+      }
+    });
+
+    return () => unsub();
+  }, [teamId, router]);
+
   // prevent copy/contextmenu, detect tab switches and block devtools shortcuts
   useEffect(() => {
     if (!teamId) return;
@@ -231,7 +356,7 @@ export default function Layout() {
                 const fn = isR2 ? finishRound2 : finishQuiz;
                 const res = await fn(teamId, new Date());
                 if (res?.success) {
-                  router.push('/submitted');
+                  router.push(isR2 ? '/submitted?round=2' : '/submitted?round=1');
                 } else {
                   alert(res?.message || 'Auto submit failed');
                 }
@@ -327,7 +452,7 @@ export default function Layout() {
       const fn = isR2 ? finishRound2 : finishQuiz;
       const res = await fn(teamId, new Date());
       if (res?.success) {
-        router.push("/submitted");
+        router.push(isR2 ? "/submitted?round=2" : "/submitted?round=1");
       } else {
         alert(res?.message || "Failed to finish quiz");
       }
@@ -391,6 +516,63 @@ export default function Layout() {
             </div>
             <h3 style={{ color: '#facc15', fontWeight: 700, fontSize: '1.125rem', marginBottom: '0.25rem' }}>Warning</h3>
             <p style={{ color: '#d4d4d4', fontSize: '0.875rem', lineHeight: '1.6' }}>{tabWarning}</p>
+          </div>
+        </div>
+      )}
+
+      {/* Paused by Admin overlay */}
+      {isPaused && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 99998, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(12px)' }}>
+          <div style={{ backgroundColor: '#14141e', border: '1px solid rgba(198,255,0,0.2)', borderRadius: '1.25rem', boxShadow: '0 0 80px rgba(198,255,0,0.05)', padding: '2.5rem', maxWidth: '26rem', width: '100%', margin: '0 1rem', textAlign: 'center' }}>
+            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1rem' }}>
+              <div style={{ width: '4rem', height: '4rem', borderRadius: '50%', backgroundColor: 'rgba(198,255,0,0.1)', border: '2px solid rgba(198,255,0,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <span style={{ color: '#C6FF00', fontSize: '2rem' }}>⏸</span>
+              </div>
+            </div>
+            <h3 style={{ color: '#C6FF00', fontWeight: 800, fontSize: '1.5rem', marginBottom: '0.5rem', letterSpacing: '0.05em' }}>Quiz Paused</h3>
+            <p style={{ color: '#9aa0a6', fontSize: '0.95rem', lineHeight: '1.7' }}>
+              The quiz has been paused by the admin.<br />Please wait until it is resumed.
+            </p>
+            <div style={{ marginTop: '1.5rem' }}>
+              <div className="animate-pulse" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1rem', borderRadius: '9999px', border: '1px solid rgba(198,255,0,0.2)', backgroundColor: 'rgba(198,255,0,0.05)', color: '#C6FF00', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+                <span style={{ width: '0.5rem', height: '0.5rem', borderRadius: '50%', backgroundColor: '#C6FF00' }} />
+                Waiting for admin
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirm End Quiz modal */}
+      {showConfirmEnd && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 99997, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(8px)' }}>
+          <div style={{ backgroundColor: '#14141e', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '1.25rem', boxShadow: '0 0 60px rgba(239,68,68,0.08)', padding: '2rem', maxWidth: '28rem', width: '100%', margin: '0 1rem', textAlign: 'center' }}>
+            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1rem' }}>
+              <div style={{ width: '3.5rem', height: '3.5rem', borderRadius: '50%', backgroundColor: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <span style={{ color: '#ef4444', fontSize: '1.75rem' }}>⚠</span>
+              </div>
+            </div>
+            <h3 style={{ color: '#ffffff', fontWeight: 800, fontSize: '1.25rem', marginBottom: '0.5rem' }}>End Quiz?</h3>
+            <p style={{ color: '#9aa0a6', fontSize: '0.875rem', lineHeight: '1.7', marginBottom: '1.5rem' }}>
+              Are you sure you want to end the test? This action cannot be undone. All your answers will be submitted.
+            </p>
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center' }}>
+              <button
+                onClick={() => setShowConfirmEnd(false)}
+                className="px-5 py-2.5 rounded-xl text-sm font-bold border border-neutral-600 text-neutral-300 bg-transparent hover:bg-neutral-800 transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  setShowConfirmEnd(false);
+                  handleEndQuiz();
+                }}
+                className="px-5 py-2.5 rounded-xl text-sm font-bold bg-red-600 text-white hover:bg-red-500 transition-all"
+              >
+                Yes, End Test
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -538,8 +720,8 @@ export default function Layout() {
           <div className="flex items-center justify-between mt-6">
             <button
               onClick={() => setCurrentIndex((i) => Math.max(0, i - 1))}
-              className="px-4 py-2 rounded-xl border border-white/10 text-sm"
-              disabled={currentIndex === 0}
+              className="px-4 py-2 rounded-xl border border-white/10 text-sm disabled:opacity-40 disabled:cursor-not-allowed"
+              disabled={currentIndex === 0 || isPaused}
             >
               Previous
             </button>
@@ -554,15 +736,15 @@ export default function Layout() {
       setCurrentIndex((i) => i + 1);
     }
   }}
-  className="px-4 py-2 rounded-xl bg-[#C6FF00] text-[#0a0a0f] text-sm font-bold"
-  disabled={finishing}
+  className="px-4 py-2 rounded-xl bg-[#C6FF00] text-[#0a0a0f] text-sm font-bold disabled:opacity-40 disabled:cursor-not-allowed"
+  disabled={finishing || isPaused}
 >
   {currentIndex === questions.length - 1 ? "Submit Quiz" : "Next"}
 </button>
             {/* End Quiz button */}
             <button
               onClick={attemptSubmit}
-              disabled={finishing}
+              disabled={finishing || isPaused}
               className="px-4 py-2 rounded-xl bg-red-600 text-white text-sm font-bold disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {finishing ? "Ending..." : "End Quiz"}
@@ -602,7 +784,7 @@ export default function Layout() {
               <button
                 onClick={() => {
                   setShowSubmitWarning(false);
-                  handleEndQuiz();
+                  setShowConfirmEnd(true);
                 }}
                 className="px-5 py-2.5 rounded-xl text-sm font-bold bg-red-600 text-white hover:bg-red-500 transition-all"
               >

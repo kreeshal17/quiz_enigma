@@ -58,7 +58,7 @@ export default function LoginPage() {
           return;
         }
         if (t.round2Completed) {
-          router.push("/submitted");
+          router.push("/submitted?round=2");
           return;
         }
 

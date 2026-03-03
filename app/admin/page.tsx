@@ -40,6 +40,7 @@ interface Team {
   questions: string[];
   isStarted: boolean;
   isCompleted: boolean;
+  isPaused: boolean;
   start_time: Date | null;
   end_time: Date | null;
   marksScore: number | null;
@@ -52,6 +53,7 @@ interface Team {
   round2TotalScore: number | null;
   round2Started: boolean;
   round2Completed: boolean;
+  round2Paused: boolean;
   round2_start_time: Date | null;
   round2_end_time: Date | null;
 }
@@ -888,10 +890,12 @@ function TeamsTab({ teams, questions, loading, onCreateTeam, onAddMember, onRemo
                       <button onClick={() => onToggleStart(team)} disabled={team.isCompleted}
                         className={`px-4 py-2 rounded-xl text-xs font-bold border transition-all disabled:opacity-40 ${
                           team.isStarted
-                            ? "text-neutral-300 bg-neutral-800 hover:bg-neutral-700 border-neutral-700"
+                            ? team.isPaused
+                              ? "text-green-400 bg-green-950/40 hover:bg-green-950/60 border-green-500/40 hover:border-green-500/60"
+                              : "text-yellow-400 bg-yellow-950/40 hover:bg-yellow-950/60 border-yellow-500/40 hover:border-yellow-500/60"
                             : "text-green-400 bg-green-950/40 hover:bg-green-950/60 border-green-500/40 hover:border-green-500/60"
                         }`}>
-                        {team.isStarted ? "Pause R1" : "Start R1"}
+                        {team.isStarted ? (team.isPaused ? "Resume R1" : "Pause R1") : "Start R1"}
                       </button>
                       <button onClick={() => onToggleComplete(team)} disabled={!team.isStarted}
                         className={`px-4 py-2 rounded-xl text-xs font-bold border transition-all disabled:opacity-40 ${
@@ -916,10 +920,12 @@ function TeamsTab({ teams, questions, loading, onCreateTeam, onAddMember, onRemo
                           <button onClick={() => onToggleR2Start(team)} disabled={team.round2Completed}
                             className={`px-4 py-2 rounded-xl text-xs font-bold border transition-all disabled:opacity-40 ${
                               team.round2Started
-                                ? "text-blue-300 bg-blue-950/40 hover:bg-blue-950/60 border-blue-500/40"
+                                ? team.round2Paused
+                                  ? "text-green-400 bg-green-950/40 hover:bg-green-950/60 border-green-500/40"
+                                  : "text-yellow-400 bg-yellow-950/40 hover:bg-yellow-950/60 border-yellow-500/40"
                                 : "text-blue-400 bg-blue-950/40 hover:bg-blue-950/60 border-blue-500/40 hover:border-blue-500/60"
                             }`}>
-                            {team.round2Started ? "Pause R2" : "Start R2"}
+                            {team.round2Started ? (team.round2Paused ? "Resume R2" : "Pause R2") : "Start R2"}
                           </button>
                           <button onClick={() => onToggleR2Complete(team)} disabled={!team.round2Started}
                             className={`px-4 py-2 rounded-xl text-xs font-bold border transition-all disabled:opacity-40 ${
@@ -1278,18 +1284,32 @@ export default function AdminPanel() {
   };
 
   const handleToggleStart = async (team: Team) => {
-    const newStarted = !team.isStarted;
-    const ok = await confirm(newStarted ? `Start quiz for "${team.teamName}"?` : `Pause quiz for "${team.teamName}"?`);
-    if (!ok) return;
-    setActionLoading(true);
-    try {
-      const updates: Record<string, any> = { isStarted: newStarted };
-      if (newStarted && !team.start_time) updates.start_time = serverTimestamp();
-      await updateDoc(doc(firebasedb, "teams", team.teamId), updates);
-      setTeams((p) => p.map((t) => t.teamId === team.teamId ? { ...t, isStarted: newStarted, start_time: newStarted && !t.start_time ? new Date() : t.start_time } : t));
-      push(`Quiz ${newStarted ? "started" : "paused"}.`, "success");
-    } catch (e) { push(`Failed: ${(e as Error).message}`, "error"); }
-    finally { setActionLoading(false); }
+    // If quiz hasn't started yet, start it. Otherwise toggle pause.
+    if (!team.isStarted) {
+      const ok = await confirm(`Start quiz for "${team.teamName}"?`);
+      if (!ok) return;
+      setActionLoading(true);
+      try {
+        const updates: Record<string, any> = { isStarted: true, isPaused: false };
+        if (!team.start_time) updates.start_time = serverTimestamp();
+        await updateDoc(doc(firebasedb, "teams", team.teamId), updates);
+        setTeams((p) => p.map((t) => t.teamId === team.teamId ? { ...t, isStarted: true, isPaused: false, start_time: !t.start_time ? new Date() : t.start_time } : t));
+        push("Quiz started.", "success");
+      } catch (e) { push(`Failed: ${(e as Error).message}`, "error"); }
+      finally { setActionLoading(false); }
+    } else {
+      // Toggle pause
+      const newPaused = !team.isPaused;
+      const ok = await confirm(newPaused ? `Pause quiz for "${team.teamName}"?` : `Resume quiz for "${team.teamName}"?`);
+      if (!ok) return;
+      setActionLoading(true);
+      try {
+        await updateDoc(doc(firebasedb, "teams", team.teamId), { isPaused: newPaused });
+        setTeams((p) => p.map((t) => t.teamId === team.teamId ? { ...t, isPaused: newPaused } : t));
+        push(`Quiz ${newPaused ? "paused" : "resumed"}.`, "success");
+      } catch (e) { push(`Failed: ${(e as Error).message}`, "error"); }
+      finally { setActionLoading(false); }
+    }
   };
 
   const handleToggleComplete = async (team: Team) => {
@@ -1349,18 +1369,30 @@ export default function AdminPanel() {
   };
 
   const handleToggleR2Start = async (team: Team) => {
-    const newStarted = !team.round2Started;
-    const ok = await confirm(newStarted ? `Start Round 2 for "${team.teamName}"?` : `Pause Round 2 for "${team.teamName}"?`);
-    if (!ok) return;
-    setActionLoading(true);
-    try {
-      const updates: Record<string, any> = { round2Started: newStarted };
-      if (newStarted && !team.round2_start_time) updates.round2_start_time = serverTimestamp();
-      await updateDoc(doc(firebasedb, "teams", team.teamId), updates);
-      setTeams((p) => p.map((t) => t.teamId === team.teamId ? { ...t, round2Started: newStarted, round2_start_time: newStarted && !t.round2_start_time ? new Date() : t.round2_start_time } : t));
-      push(`Round 2 ${newStarted ? "started" : "paused"}.`, "success");
-    } catch (e) { push(`Failed: ${(e as Error).message}`, "error"); }
-    finally { setActionLoading(false); }
+    if (!team.round2Started) {
+      const ok = await confirm(`Start Round 2 for "${team.teamName}"?`);
+      if (!ok) return;
+      setActionLoading(true);
+      try {
+        const updates: Record<string, any> = { round2Started: true, round2Paused: false };
+        if (!team.round2_start_time) updates.round2_start_time = serverTimestamp();
+        await updateDoc(doc(firebasedb, "teams", team.teamId), updates);
+        setTeams((p) => p.map((t) => t.teamId === team.teamId ? { ...t, round2Started: true, round2Paused: false, round2_start_time: !t.round2_start_time ? new Date() : t.round2_start_time } : t));
+        push("Round 2 started.", "success");
+      } catch (e) { push(`Failed: ${(e as Error).message}`, "error"); }
+      finally { setActionLoading(false); }
+    } else {
+      const newPaused = !team.round2Paused;
+      const ok = await confirm(newPaused ? `Pause Round 2 for "${team.teamName}"?` : `Resume Round 2 for "${team.teamName}"?`);
+      if (!ok) return;
+      setActionLoading(true);
+      try {
+        await updateDoc(doc(firebasedb, "teams", team.teamId), { round2Paused: newPaused });
+        setTeams((p) => p.map((t) => t.teamId === team.teamId ? { ...t, round2Paused: newPaused } : t));
+        push(`Round 2 ${newPaused ? "paused" : "resumed"}.`, "success");
+      } catch (e) { push(`Failed: ${(e as Error).message}`, "error"); }
+      finally { setActionLoading(false); }
+    }
   };
 
   const handleToggleR2Complete = async (team: Team) => {

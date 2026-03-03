@@ -9,6 +9,7 @@ interface Team {
     questions: string[]
     isStarted: boolean
     isCompleted: boolean
+    isPaused: boolean
     start_time: Date | null
     end_time: Date | null
     marksScore: number | null
@@ -21,6 +22,7 @@ interface Team {
     round2TotalScore: number | null
     round2Started: boolean
     round2Completed: boolean
+    round2Paused: boolean
     round2_start_time: Date | null
     round2_end_time: Date | null
 }

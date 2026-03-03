@@ -1,8 +1,14 @@
 "use client";
 
 import { CheckCircle } from "lucide-react";
+import { useSearchParams } from "next/navigation";
+import { Suspense } from "react";
 
-export default function SubmittedPage() {
+function SubmittedContent() {
+  const searchParams = useSearchParams();
+  const round = searchParams.get("round");
+  const isRound2 = round === "2";
+
   return (
     <div className="min-h-screen bg-[#0a0a0f] text-white flex items-center justify-center px-4 noise-bg">
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
@@ -18,7 +24,7 @@ export default function SubmittedPage() {
         </div>
 
         <h1 className="text-3xl sm:text-4xl font-black tracking-tight mb-3 text-white">
-          Quiz Submitted!
+          {isRound2 ? "Round 2 Completed!" : "Quiz Submitted!"}
         </h1>
 
         <p className="text-[#9aa0a6] text-sm mb-8 leading-relaxed">
@@ -30,15 +36,34 @@ export default function SubmittedPage() {
           Results will be announced soon
         </div>
 
-        <p className="mt-6 text-yellow-400/80 text-sm font-medium leading-relaxed">
-          Please wait until the results are out for Round 2. <br />
-          Qualified teams will be notified to proceed.
-        </p>
+        {isRound2 ? (
+          <p className="mt-6 text-[#C6FF00]/80 text-sm font-medium leading-relaxed">
+            You have completed both rounds of the ENIGMA Quiz! <br />
+            The final results will be announced soon. Stay tuned!
+          </p>
+        ) : (
+          <p className="mt-6 text-yellow-400/80 text-sm font-medium leading-relaxed">
+            Please wait until the results are out for Round 2. <br />
+            Qualified teams will be notified to proceed.
+          </p>
+        )}
 
         <p className="mt-10 text-[#9aa0a6]/40 text-xs tracking-wider">
           ENIGMA &copy; {new Date().getFullYear()} &middot; Power Card Challenge
         </p>
       </div>
     </div>
+  );
+}
+
+export default function SubmittedPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center">
+        <div className="animate-spin h-8 w-8 border-2 border-[#C6FF00] border-t-transparent rounded-full" />
+      </div>
+    }>
+      <SubmittedContent />
+    </Suspense>
   );
 }
