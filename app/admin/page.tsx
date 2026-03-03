@@ -1155,6 +1155,8 @@ export default function AdminPanel() {
         round2Completed: false,
         round2_start_time: null,
         round2_end_time: null,
+        isPaused: false,
+        round2Paused: false,
       };
       await setDoc(newTeamRef, teamData);
       setTeams((p) => [...p, { teamId: newTeamRef.id, ...teamData }]);
@@ -1358,6 +1360,8 @@ export default function AdminPanel() {
         round2Completed: false,
         round2_start_time: null,
         round2_end_time: null,
+        isPaused: false,
+        round2Paused: false,
       };
 
       await updateDoc(doc(firebasedb, "teams", team.teamId), r2Fields);
