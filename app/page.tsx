@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import {
   Shield,
   ChevronDown,
@@ -13,6 +14,7 @@ import {
   Users,
   CheckCircle2,
 } from "lucide-react";
+import MysteryRevealCard from "@/components/MysteryRevealCard";
 
 export default function Home() {
   const [agreedToTerms, setAgreedToTerms] = useState(false);
@@ -48,15 +50,36 @@ export default function Home() {
     <div className="min-h-screen bg-[#0a0a0f] text-white overflow-x-hidden noise-bg">
       {/* ===== HERO SECTION ===== */}
       <section className="relative min-h-screen flex flex-col items-center justify-center px-4">
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <Image
+            src="/enigma.avif"
+            alt="Enigma background"
+            fill
+            priority
+            className="object-cover object-center opacity-35 scale-105"
+          />
+        </div>
+
         {/* Animated background gradients */}
         <div className="absolute inset-0 overflow-hidden">
-          <div className="absolute top-1/4 -left-1/4 w-[600px] h-[600px] bg-[#C6FF00]/10 rounded-full blur-[140px] animate-pulse-slow" />
-          <div className="absolute bottom-1/4 -right-1/4 w-[500px] h-[500px] bg-[#C6FF00]/5 rounded-full blur-[120px] animate-pulse-slow animation-delay-2000" />
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] h-[400px] bg-[#C6FF00]/8 rounded-full blur-[100px] animate-pulse-slow animation-delay-4000" />
+          <div className="absolute inset-0 bg-gradient-to-b from-[#140304] via-[#090303] to-[#020202]" />
+          <div className="absolute inset-0 stage-curtain-overlay" />
+          <div className="absolute top-1/4 -left-1/4 w-[600px] h-[600px] bg-[#7a0f19]/20 rounded-full blur-[140px] animate-pulse-slow" />
+          <div className="absolute bottom-1/4 -right-1/4 w-[500px] h-[500px] bg-[#5e0d15]/20 rounded-full blur-[120px] animate-pulse-slow animation-delay-2000" />
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] h-[400px] bg-[#8b121f]/20 rounded-full blur-[100px] animate-pulse-slow animation-delay-4000" />
+        </div>
+
+        {/* Floating particle lights */}
+        <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden="true">
+          <span className="particle-light left-[10%] top-[20%] animation-delay-2000" />
+          <span className="particle-light left-[22%] top-[65%]" />
+          <span className="particle-light left-[48%] top-[30%] animation-delay-4000" />
+          <span className="particle-light left-[64%] top-[72%] animation-delay-2000" />
+          <span className="particle-light left-[82%] top-[40%]" />
         </div>
 
         {/* Grid pattern overlay */}
-        <div className="absolute inset-0 bg-[linear-gradient(rgba(198,255,0,.03)_1px,transparent_1px),linear-gradient(90deg,rgba(198,255,0,.03)_1px,transparent_1px)] bg-[size:64px_64px]" />
+        <div className="absolute inset-0 bg-[linear-gradient(rgba(255,80,80,.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,80,80,.03)_1px,transparent_1px)] bg-[size:64px_64px]" />
 
         <div
           className={`relative z-10 text-center transition-all duration-1000 ease-out ${
@@ -76,6 +99,12 @@ export default function Home() {
             </span>
           </h1>
 
+          <p className="text-sm sm:text-base md:text-lg tracking-wider text-red-100/90 mb-2">
+            The Blinddate - Who's gonna be your tech partner?
+          </p>
+
+          <MysteryRevealCard />
+
           {/* Subtitle */}
           <p className="text-lg sm:text-xl md:text-2xl font-bold tracking-[0.3em] uppercase text-[#cccccc] mb-3">
             Power Card Challenge
@@ -89,7 +118,7 @@ export default function Home() {
           {/* Scroll CTA */}
           <button
             onClick={scrollToRules}
-            className="group inline-flex flex-col items-center gap-2 text-[#9aa0a6] hover:text-[#C6FF00] transition-colors duration-300"
+            className="group inline-flex flex-col items-center gap-2 text-[#b8a0a4] hover:text-[#ff7b7b] transition-all duration-300 mystery-button-glow rounded-xl px-4 py-2"
           >
             <span className="text-xs uppercase tracking-widest">Enter the Arena</span>
             <ChevronDown className="w-5 h-5 animate-bounce" />
@@ -102,38 +131,49 @@ export default function Home() {
 
       {/* ===== RULES SECTION ===== */}
       <section ref={rulesRef} className="relative py-24 px-4">
-        <div className="max-w-2xl mx-auto">
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <Image
+            src="/enigma.avif"
+            alt="Enigma rules background"
+            fill
+            className="object-cover object-center opacity-25"
+          />
+          <div className="absolute inset-0 bg-gradient-to-b from-[#090909]/85 via-[#120506]/82 to-[#090909]/90" />
+          <div className="absolute inset-0 stage-curtain-overlay opacity-60" />
+        </div>
+
+        <div className="relative z-10 max-w-2xl mx-auto">
           {/* Section heading */}
           <div className="text-center mb-12">
-            <div className="inline-flex items-center gap-2 px-3 py-1 mb-4 rounded-full border border-[#C6FF00]/20 bg-[#C6FF00]/5 text-[#C6FF00] text-xs uppercase tracking-widest">
+            <div className="inline-flex items-center gap-2 px-3 py-1 mb-4 rounded-full border border-[#ff8a96]/30 bg-[#7a0f19]/20 text-[#ff9da7] text-xs uppercase tracking-widest">
               <Shield className="w-3.5 h-3.5" />
               Mandatory
             </div>
-            <h2 className="text-3xl sm:text-4xl font-bold tracking-tight uppercase mb-2">
+            <h2 className="text-3xl sm:text-4xl font-bold tracking-tight uppercase mb-2 text-[#ffd6db]">
               Competition Rules
             </h2>
-            <p className="text-[#9aa0a6] text-sm">& Fair Play Policy</p>
+            <p className="text-[#c4a6aa] text-sm">& Fair Play Policy</p>
           </div>
 
           {/* Rules Card */}
-          <div className="relative rounded-2xl border border-[#C6FF00]/15 bg-[rgba(20,20,30,0.8)] backdrop-blur-xl p-8 shadow-2xl shadow-[#C6FF00]/5">
+          <div className="relative rounded-2xl border border-[#ff8a96]/20 bg-[rgba(26,10,12,0.78)] backdrop-blur-xl p-8 shadow-2xl shadow-[#7a0f19]/20">
             {/* Glass highlight */}
-            <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-[#C6FF00]/[0.03] to-transparent pointer-events-none" />
+            <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-[#ff8a96]/[0.07] to-transparent pointer-events-none" />
 
             <div className="relative space-y-4">
               {rules.map((rule, i) => (
                 <div
                   key={i}
-                  className="flex items-start gap-4 p-3 rounded-lg hover:bg-[#C6FF00]/5 transition-colors duration-200"
+                  className="flex items-start gap-4 p-3 rounded-lg hover:bg-[#ff8a96]/10 transition-colors duration-200"
                 >
-                  <div className="flex-shrink-0 mt-0.5 text-[#C6FF00]/70">{rule.icon}</div>
-                  <p className="text-[#cccccc] text-sm sm:text-base leading-relaxed">{rule.text}</p>
+                  <div className="flex-shrink-0 mt-0.5 text-[#ff8a96]/80">{rule.icon}</div>
+                  <p className="text-[#f2d7db] text-sm sm:text-base leading-relaxed">{rule.text}</p>
                 </div>
               ))}
             </div>
 
             {/* Divider */}
-            <div className="my-8 h-px bg-gradient-to-r from-transparent via-[#C6FF00]/15 to-transparent" />
+            <div className="my-8 h-px bg-gradient-to-r from-transparent via-[#ff8a96]/30 to-transparent" />
 
             {/* Checkbox */}
             <label className="flex items-center gap-3 cursor-pointer group select-none">
@@ -144,14 +184,14 @@ export default function Home() {
                   onChange={(e) => setAgreedToTerms(e.target.checked)}
                   className="sr-only peer"
                 />
-                <div className="w-5 h-5 rounded border-2 border-white/20 peer-checked:border-[#C6FF00] peer-checked:bg-[#C6FF00] transition-all duration-300 flex items-center justify-center peer-checked:shadow-[0_0_10px_rgba(198,255,0,0.4)]">
+                <div className="w-5 h-5 rounded border-2 border-white/20 peer-checked:border-[#ff8a96] peer-checked:bg-[#ff8a96] transition-all duration-300 flex items-center justify-center peer-checked:shadow-[0_0_10px_rgba(255,138,150,0.45)]">
                   {agreedToTerms && (
                     <CheckCircle2 className="w-3.5 h-3.5 text-[#0a0a0f] animate-check-pop" />
                   )}
                 </div>
               </div>
-              <span className="text-sm text-[#9aa0a6] group-hover:text-[#cccccc] transition-colors">
-                I have read and agree to the <span className="text-[#C6FF00]">Terms & Conditions</span>
+              <span className="text-sm text-[#c4a6aa] group-hover:text-[#f2d7db] transition-colors">
+                I have read and agree to the <span className="text-[#ff9da7]">Terms & Conditions</span>
               </span>
             </label>
 
@@ -159,7 +199,7 @@ export default function Home() {
             <button
               onClick={handleProceedToLogin}
               disabled={!agreedToTerms}
-              className={`mt-6 w-full py-3.5 rounded-xl text-sm font-bold uppercase tracking-wider transition-all duration-500 ${
+              className={`mt-6 w-full py-3.5 rounded-xl text-sm font-bold uppercase tracking-wider transition-all duration-500 mystery-button-glow ${
                 agreedToTerms
                   ? "bg-[#C6FF00] text-[#0a0a0f] shadow-lg shadow-[#C6FF00]/25 hover:shadow-[#C6FF00]/50 hover:brightness-110 hover:scale-[1.01] active:scale-[0.99] cursor-pointer"
                   : "bg-white/5 text-gray-600 cursor-not-allowed border border-white/5"

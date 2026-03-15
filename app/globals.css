@@ -163,6 +163,28 @@
   100% { transform: scale(1); }
 }
 
+@keyframes mystery-card-glow {
+  0%, 100% {
+    box-shadow: 0 0 16px rgba(255, 72, 94, 0.25), 0 0 40px rgba(149, 22, 31, 0.2);
+    transform: translateY(0);
+  }
+  50% {
+    box-shadow: 0 0 28px rgba(255, 98, 118, 0.42), 0 0 64px rgba(149, 22, 31, 0.35);
+    transform: translateY(-2px);
+  }
+}
+
+@keyframes particle-drift {
+  0%, 100% {
+    transform: translateY(0px) scale(1);
+    opacity: 0.2;
+  }
+  50% {
+    transform: translateY(-16px) scale(1.08);
+    opacity: 0.45;
+  }
+}
+
 @keyframes fadeIn {
   from { opacity: 0; }
   to { opacity: 1; }
@@ -199,6 +221,41 @@
 
 .animate-check-pop {
   animation: check-pop 0.3s ease-out forwards;
+}
+
+.stage-curtain-overlay {
+  background-image:
+    linear-gradient(to bottom, rgba(0, 0, 0, 0.15), rgba(0, 0, 0, 0.55)),
+    repeating-linear-gradient(
+      90deg,
+      rgba(255, 84, 84, 0.06) 0px,
+      rgba(255, 84, 84, 0.02) 16px,
+      rgba(0, 0, 0, 0.18) 32px,
+      rgba(0, 0, 0, 0.06) 48px
+    );
+}
+
+.mystery-card-glow {
+  animation: mystery-card-glow 3.5s ease-in-out infinite;
+}
+
+.silhouette-left,
+.silhouette-right {
+  background: radial-gradient(circle at 50% 25%, rgba(255, 255, 255, 0.3), rgba(120, 10, 20, 0.2) 45%, transparent 75%);
+}
+
+.particle-light {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  background: rgba(255, 176, 176, 0.75);
+  box-shadow: 0 0 12px rgba(255, 100, 110, 0.5), 0 0 28px rgba(255, 100, 110, 0.25);
+  animation: particle-drift 7s ease-in-out infinite;
+}
+
+.mystery-button-glow:hover {
+  box-shadow: 0 0 0 1px rgba(255, 120, 120, 0.35), 0 0 20px rgba(255, 70, 90, 0.35);
 }
 
 /* Noise texture overlay */
