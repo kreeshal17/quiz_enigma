@@ -17,7 +17,7 @@ export default function Layout() {
   const [team, setTeam] = useState<any | null>(null);
   const [questions, setQuestions] = useState<any[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [remainingSeconds, setRemainingSeconds] = useState<number>(2400);
+  const [remainingSeconds, setRemainingSeconds] = useState<number>(900);
   const [warning, setWarning] = useState<string | null>(null);
   const [finishing, setFinishing] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -137,7 +137,7 @@ export default function Layout() {
                     : startRaw2
                       ? new Date(startRaw2)
                       : null;
-              const TOTAL2 = isR2 ? 3600 : 2400;
+              const TOTAL2 = isR2 ? 3600 : 900;
               const finishFn2 = isR2 ? finishRound2 : finishQuiz;
               const submittedUrl2 = isR2 ? "/submitted?round=2" : "/submitted?round=1";
               if (startDate2) {
@@ -229,7 +229,7 @@ export default function Layout() {
                 ? new Date(startRaw)
                 : null;
 
-        const TOTAL_SECONDS = isR2 ? 3600 : 2400; // 60 min R2, 40 min R1
+        const TOTAL_SECONDS = isR2 ? 3600 : 900; // 60 min R2, 15 min R1
         const finishFn = isR2 ? finishRound2 : finishQuiz;
         const submittedUrl = isR2 ? "/submitted?round=2" : "/submitted?round=1";
         if (startDate) {
